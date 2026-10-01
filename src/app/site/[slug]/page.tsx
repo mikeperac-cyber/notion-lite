@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { BlockEditor } from "@/components/editor/block-editor";
 import { DatabaseContainer } from "@/components/database/database-container";
-import { Globe, Sparkles } from "lucide-react";
+import { Globe } from "lucide-react";
 
 export const revalidate = 0;
 

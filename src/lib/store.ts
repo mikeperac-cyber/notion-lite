@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { PageSchema, WorkspaceSchema, DatabaseSchema } from "@/types";
+import { PageSchema, WorkspaceSchema } from "@/types";
 
 interface AppState {
   // Navigation & Workspace

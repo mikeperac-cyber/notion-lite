@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import {
   PropertySchema,
-  PropertyType,
   SelectOption,
 } from "@/types";
 import { Badge, safeBadgeVariant } from "@/components/ui/badge";
@@ -12,10 +11,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
 import { evaluateFormula } from "@/lib/formula";
-import { formatDateTime } from "@/lib/utils";
-import { ExternalLink, Calendar, Check, Hash, Type, Sparkles } from "lucide-react";
+import { ExternalLink, Calendar, Check, Sparkles } from "lucide-react";
 
 interface PropertyCellProps {
   property: PropertySchema;
@@ -26,10 +23,6 @@ interface PropertyCellProps {
   readOnly?: boolean;
   rowId?: string;
 }
-
-const DEFAULT_COLORS = [
-  "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"
-];
 
 export function PropertyCell({
   property,

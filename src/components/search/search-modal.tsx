@@ -2,16 +2,13 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Search, FileText, Table as TableIcon, ArrowRight } from "lucide-react";
+import { Search, ArrowRight } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { PageSchema } from "@/types";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function SearchModal() {

@@ -19,14 +19,12 @@ import {
   Tag,
   Link2,
   Sparkles,
-  ArrowUpDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -108,7 +106,7 @@ export function TableView({
             <th className="w-10 px-2 py-2 text-center text-xs text-muted-foreground font-normal border-r border-border">
               #
             </th>
-            {properties.map((prop, idx) => (
+            {properties.map((prop) => (
               <th
                 key={prop.id}
                 className="px-3 py-2 text-xs font-semibold text-muted-foreground border-r border-border min-w-[160px] group/col"

@@ -85,17 +85,15 @@ export async function POST(
       },
     });
 
-    // If source page had database rows, clone the rows too
-    if (sourcePage.database && duplicatedPage.database) {
-      for (const row of sourcePage.database.rows) {
-        await prisma.row.create({
-          data: {
-            databaseId: duplicatedPage.database.id,
-            properties: row.properties,
-            order: row.order,
-          },
-        });
-      }
+    // If source page had database rows, clone the rows too (single batch)
+    if (sourcePage.database && duplicatedPage.database && sourcePage.database.rows.length > 0) {
+      await prisma.row.createMany({
+        data: sourcePage.database.rows.map(row => ({
+          databaseId: duplicatedPage.database!.id,
+          properties: row.properties,
+          order: row.order,
+        })),
+      });
     }
 
     await refreshSearchPage(duplicatedPage.id);

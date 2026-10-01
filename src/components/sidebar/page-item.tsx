@@ -5,13 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight,
-  FileText,
-  Folder,
   MoreHorizontal,
   Plus,
   Trash2,
   Copy,
-  Table as TableIcon,
   Star,
 } from "lucide-react";
 import { PageSchema } from "@/types";

@@ -8,7 +8,6 @@ import {
 } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Maximize2, Calendar } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface GalleryViewProps {
   properties: PropertySchema[];

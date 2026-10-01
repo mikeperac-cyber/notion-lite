@@ -5,7 +5,7 @@ import {
   PropertySchema,
   DatabaseRow,
 } from "@/types";
-import { Plus, Calendar as CalIcon, Clock } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface TimelineViewProps {

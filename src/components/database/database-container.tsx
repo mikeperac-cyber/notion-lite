@@ -3,9 +3,7 @@
 import React, { useState } from "react";
 import {
   DatabaseSchema,
-  PropertySchema,
   DatabaseRow,
-  DatabaseViewSchema,
   ViewType,
   PropertyType,
 } from "@/types";
@@ -25,17 +23,8 @@ import {
   Clock,
   Plus,
   Search,
-  Filter,
-  ArrowUpDown,
-  MoreHorizontal,
-  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,

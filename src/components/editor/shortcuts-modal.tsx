@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Keyboard, Command } from "lucide-react";
+import { Keyboard } from "lucide-react";
 
 interface ShortcutsModalProps {
   open: boolean;

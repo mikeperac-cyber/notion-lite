@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import {
   DatabaseRow,
   PropertySchema,
-  PropertyType,
   PageSchema,
 } from "@/types";
 import { PropertyCell } from "./property-cell";
@@ -12,12 +11,10 @@ import { BlockEditor } from "../editor/block-editor";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Trash2, Calendar, Sparkles } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 interface RowModalProps {

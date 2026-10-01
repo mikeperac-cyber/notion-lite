@@ -10,7 +10,6 @@ import {
   Copy,
   Check,
   PlusCircle,
-  FileSearch,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";

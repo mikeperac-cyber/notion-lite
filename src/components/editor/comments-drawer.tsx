@@ -6,8 +6,6 @@ import {
   X,
   Send,
   Trash2,
-  CheckCircle,
-  User,
   Clock,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";

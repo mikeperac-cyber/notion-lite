@@ -8,7 +8,7 @@ import {
 } from "@/types";
 import { Badge, safeBadgeVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Plus, MoreHorizontal, Maximize2, Calendar } from "lucide-react";
+import { Plus, Maximize2, Calendar } from "lucide-react";
 
 interface BoardViewProps {
   properties: PropertySchema[];

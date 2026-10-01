@@ -32,48 +32,55 @@ export async function POST(req: Request) {
 
       // 2. Upsert changed blocks
       if (changedBlocks && changedBlocks.length > 0) {
+        // Single batched lookup replaces N per-block findUnique calls.
+        const knownIds = changedBlocks
+          .filter((b: any) => b.id && !String(b.id).startsWith("temp-"))
+          .map((b: any) => b.id);
+        const known = knownIds.length
+          ? await tx.block.findMany({ where: { id: { in: knownIds } }, select: { id: true, pageId: true } })
+          : [];
+        const knownPages = new Map(known.map(block => [block.id, block.pageId]));
         for (const b of changedBlocks) {
-            const isTempId = b.id && b.id.startsWith("temp-");
-            const blockId = isTempId ? undefined : b.id;
-            const contentStr = typeof b.content === "object" ? JSON.stringify(b.content) : String(b.content || "{}");
-            if (b.syncedBlockId && b.content?.node?.type === "syncedBlock") {
-              await tx.syncedContent.upsert({ where: { id: b.syncedBlockId }, create: { id: b.syncedBlockId, content: JSON.stringify(b.content.node) }, update: { content: JSON.stringify(b.content.node) } });
-            }
-
-            if (blockId) {
-              const existing = await tx.block.findUnique({ where: { id: blockId } });
-              if (existing && existing.pageId !== pageId) throw new Error("Block belongs to another page");
-              await tx.block.upsert({
-                where: { id: blockId },
-                update: {
-                  type: b.type || "paragraph",
-                  content: contentStr,
-                  order: b.order,
-                  syncedBlockId: b.syncedBlockId || null,
-                },
-                create: {
-                  id: blockId,
-                  pageId,
-                  type: b.type || "paragraph",
-                  content: contentStr,
-                  order: b.order,
-                  parentId: b.parentId || null,
-                  syncedBlockId: b.syncedBlockId || null,
-                },
-              });
-            } else {
-              await tx.block.create({
-                data: {
-                  pageId,
-                  type: b.type || "paragraph",
-                  content: contentStr,
-                  order: b.order,
-                  parentId: b.parentId || null,
-                  syncedBlockId: b.syncedBlockId || null,
-                },
-              });
-            }
+          const isTempId = b.id && b.id.startsWith("temp-");
+          const blockId = isTempId ? undefined : b.id;
+          const contentStr = typeof b.content === "object" ? JSON.stringify(b.content) : String(b.content || "{}");
+          if (b.syncedBlockId && b.content?.node?.type === "syncedBlock") {
+            await tx.syncedContent.upsert({ where: { id: b.syncedBlockId }, create: { id: b.syncedBlockId, content: JSON.stringify(b.content.node) }, update: { content: JSON.stringify(b.content.node) } });
           }
+
+          if (blockId) {
+            if (knownPages.has(blockId) && knownPages.get(blockId) !== pageId) throw new Error("Block belongs to another page");
+            await tx.block.upsert({
+              where: { id: blockId },
+              update: {
+                type: b.type || "paragraph",
+                content: contentStr,
+                order: b.order,
+                syncedBlockId: b.syncedBlockId || null,
+              },
+              create: {
+                id: blockId,
+                pageId,
+                type: b.type || "paragraph",
+                content: contentStr,
+                order: b.order,
+                parentId: b.parentId || null,
+                syncedBlockId: b.syncedBlockId || null,
+              },
+            });
+          } else {
+            await tx.block.create({
+              data: {
+                pageId,
+                type: b.type || "paragraph",
+                content: contentStr,
+                order: b.order,
+                parentId: b.parentId || null,
+                syncedBlockId: b.syncedBlockId || null,
+              },
+            });
+          }
+        }
       }
     });
 

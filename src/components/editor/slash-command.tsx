@@ -51,7 +51,7 @@ export function getSuggestionItems(): CommandItem[] {
     item("Divider", "Horizontal rule", "Basic", Minus, editor => editor.chain().focus().setHorizontalRule().run()),
     item("Keyboard Shortcut", "Inline keyboard badge", "Basic", Keyboard, editor => insert(editor, "keyboardBadge", { keys: window.prompt("Keys", "Ctrl+K") || "Ctrl+K" })),
     item("Link to Page", "Insert a link to another page", "Basic", Link2, () => window.dispatchEvent(new Event("open-page-link-picker"))),
-    ...(["Info", "Success", "Warning", "Danger"] as const).map((variant, index) => item(`${variant} Callout`, "Editable highlighted note", "Callouts & Toggles", Lightbulb, editor => insert(editor, "callout", { variant: variant.toLowerCase() }, [paragraph("Write a note...")]))),
+    ...(["Info", "Success", "Warning", "Danger"] as const).map((variant) => item(`${variant} Callout`, "Editable highlighted note", "Callouts & Toggles", Lightbulb, editor => insert(editor, "callout", { variant: variant.toLowerCase() }, [paragraph("Write a note...")]))),
     item("Toggle List", "Collapsible notes", "Callouts & Toggles", ChevronRight, editor => insert(editor, "toggleBlock", { open: true }, [paragraph("Toggle heading"), paragraph("Details...")])),
     item("2 Columns", "Two editable columns", "Advanced & Media", Columns, editor => insert(editor, "columns", { count: 2 }, [{ type: "column", content: [paragraph()] }, { type: "column", content: [paragraph()] }])),
     item("3 Columns", "Three editable columns", "Advanced & Media", Columns, editor => insert(editor, "columns", { count: 3 }, [{ type: "column", content: [paragraph()] }, { type: "column", content: [paragraph()] }, { type: "column", content: [paragraph()] }])),

@@ -26,7 +26,20 @@ export async function POST(request: Request, { params }: { params: { pageId: str
     await tx.pageSnapshot.create({ data: { pageId: params.pageId, title: current.title, content: JSON.stringify(current.blocks) } });
     await tx.block.deleteMany({ where: { pageId: params.pageId } });
     await tx.page.update({ where: { id: params.pageId }, data: { title: snapshot.title } });
-    for (const block of blocks) await tx.block.create({ data: { id: block.id, pageId: params.pageId, type: block.type, content: block.content, order: block.order, syncedBlockId: block.syncedBlockId || null } });
+    const valid = blocks.filter(block => block && typeof block.id === "string" && typeof block.type === "string");
+    if (valid.length !== blocks.length) throw new Error("Snapshot is invalid");
+    if (valid.length) {
+      await tx.block.createMany({
+        data: valid.map(block => ({
+          id: block.id,
+          pageId: params.pageId,
+          type: block.type,
+          content: typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? {}),
+          order: typeof block.order === "number" ? block.order : 0,
+          syncedBlockId: block.syncedBlockId || null,
+        })),
+      });
+    }
   });
   await refreshSearchPage(params.pageId);
   return NextResponse.json({ success: true });

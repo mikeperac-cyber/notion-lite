@@ -34,7 +34,7 @@ import { PageSchema } from "@/types";
 
 export function Sidebar() {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { setTheme } = useTheme();
   const [taggedPages, setTaggedPages] = useState<Array<{ id: string; title: string; icon: string | null; tags: string[] }>>([]);
   const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [activeTag, setActiveTag] = useState<string | null>(null);
