@@ -1,0 +1,210 @@
+@import "katex/dist/katex.min.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+
+    --notion-bg: #FFFFFF;
+    --notion-hover: #F1F1EF;
+    --notion-sidebar: #F7F6F3;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+
+    --notion-bg: #191919;
+    --notion-hover: #2F2F2F;
+    --notion-sidebar: #202020;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* TipTap Editor Styles */
+.tiptap {
+  outline: none;
+  min-height: 250px;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.tiptap h1 {
+  @apply text-3xl font-bold mt-6 mb-2 tracking-tight text-foreground;
+}
+
+.tiptap h2 {
+  @apply text-2xl font-semibold mt-5 mb-2 tracking-tight text-foreground;
+}
+
+.tiptap h3 {
+  @apply text-xl font-semibold mt-4 mb-1 tracking-tight text-foreground;
+}
+
+.tiptap p {
+  @apply leading-7 my-1;
+}
+
+.tiptap ul {
+  @apply list-disc list-outside ml-6 my-2 space-y-1;
+}
+
+.tiptap ol {
+  @apply list-decimal list-outside ml-6 my-2 space-y-1;
+}
+
+.tiptap blockquote {
+  @apply border-l-4 border-primary/40 pl-4 italic my-3 text-muted-foreground;
+}
+
+.tiptap hr {
+  @apply my-6 border-border;
+}
+
+.tiptap code {
+  @apply bg-muted text-foreground px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.tiptap pre {
+  @apply bg-zinc-900 text-zinc-100 p-4 rounded-lg my-3 font-mono text-sm overflow-x-auto;
+}
+
+.tiptap pre code {
+  @apply bg-transparent p-0 text-zinc-100;
+}
+
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.tiptap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  margin: 0.25rem 0;
+}
+
+.tiptap ul[data-type="taskList"] li > label {
+  flex: 0 0 auto;
+  margin-right: 0.5rem;
+  user-select: none;
+}
+
+.tiptap ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(150, 150, 150, 0.5);
+}
+
+/* Rich Blocks */
+.tiptap kbd {
+  @apply px-1.5 py-0.5 text-xs font-mono font-semibold bg-muted border border-border rounded shadow-sm inline-block;
+}
+
+.tiptap .columns-container {
+  @apply grid gap-4 my-4 p-4 rounded-xl border border-border bg-zinc-50/50 dark:bg-zinc-900/50;
+}
+
+.tiptap .callout-success {
+  @apply border-l-4 border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-100 p-3 rounded-r-lg my-3;
+}
+
+.tiptap .callout-danger {
+  @apply border-l-4 border-rose-500 bg-rose-50/60 dark:bg-rose-950/20 text-rose-900 dark:text-rose-100 p-3 rounded-r-lg my-3;
+}
+
+.tiptap .callout-info {
+  @apply border-l-4 border-sky-500 bg-sky-50/60 dark:bg-sky-950/20 text-sky-900 dark:text-sky-100 p-3 rounded-r-lg my-3;
+}
+
+.tiptap .callout-warning {
+  @apply border-l-4 border-amber-500 bg-amber-50/60 dark:bg-amber-950/20 text-amber-900 dark:text-amber-100 p-3 rounded-r-lg my-3;
+}
+.nl-callout { border-left: 4px solid #6366f1; background: rgba(99,102,241,.08); border-radius: .5rem; padding: .75rem 1rem; margin: 1rem 0; }
+.nl-callout[variant="success"] { border-color: #10b981; background: rgba(16,185,129,.08); }
+.nl-callout[variant="warning"] { border-color: #f59e0b; background: rgba(245,158,11,.08); }
+.nl-callout[variant="danger"] { border-color: #ef4444; background: rgba(239,68,68,.08); }
+.nl-toggle { border: 1px solid hsl(var(--border)); border-radius: .5rem; padding: .5rem 1rem; margin: 1rem 0; }
+.nl-toggle::before { content: "▾ Toggle"; display: block; font-size: .75rem; color: hsl(var(--muted-foreground)); }
+.nl-columns { display: grid; gap: 1rem; margin: 1rem 0; }
+.nl-columns-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.nl-columns-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.nl-column { min-width: 0; border: 1px solid hsl(var(--border)); border-radius: .5rem; padding: .75rem; }
+.nl-source-node, .nl-progress, .nl-media, .nl-bookmark, .nl-synced { border: 1px solid hsl(var(--border)); border-radius: .5rem; padding: .75rem; margin: 1rem 0; }
+.nl-rendered { overflow: auto; margin-top: .5rem; }
+.nl-kbd { border: 1px solid hsl(var(--border)); border-radius: .25rem; padding: .1rem .35rem; font: .8em monospace; }
+.ProseMirror table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+.ProseMirror th, .ProseMirror td { border: 1px solid hsl(var(--border)); min-width: 5rem; padding: .4rem; }
+@media (max-width: 640px) { .nl-columns { grid-template-columns: 1fr; } }

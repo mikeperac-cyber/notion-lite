@@ -1,0 +1,168 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Workspace {
+  id          String            @id @default(cuid())
+  name        String
+  slug        String            @unique
+  icon        String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  pages       Page[]
+  members     WorkspaceMember[]
+}
+
+model WorkspaceMember {
+  id          String       @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        String       @default("owner")
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Page {
+  id           String          @id @default(cuid())
+  workspaceId  String
+  parentId     String?
+  title        String          @default("Untitled")
+  icon         String?
+  cover        String?
+  isPublished  Boolean         @default(false)
+  isTemplate   Boolean         @default(false)
+  isFavorite   Boolean         @default(false)
+  isArchived   Boolean         @default(false)
+  fontStyle    String          @default("sans") // sans, serif, mono
+  fullWidth    Boolean         @default(false)
+  slug         String?         @unique
+  databaseId   String?
+  order        Float           @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent       Page?           @relation("PageHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Page[]          @relation("PageHierarchy")
+  blocks       Block[]
+  database     Database?       @relation("PageDatabase")
+  row          Row?            @relation("RowAsPage")
+  comments     Comment[]
+  history      PageSnapshot[]
+
+  @@index([workspaceId, parentId])
+}
+
+model Block {
+  id            String       @id @default(cuid())
+  pageId        String
+  type          String       // paragraph, heading_1, heading_2, heading_3, bullet_list, numbered_list, todo, toggle, callout, code, image, divider, quote, database_view, synced_block
+  content       String       @default("{}") // JSON stringified node attributes or rich text
+  order         Float        @default(0)
+  parentId      String?
+  syncedBlockId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  page          Page         @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  parent        Block?       @relation("BlockHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children      Block[]      @relation("BlockHierarchy")
+  comments      Comment[]
+
+  @@index([pageId, order])
+}
+
+model SyncedContent {
+  id        String   @id
+  content   String
+  updatedAt DateTime @updatedAt
+}
+
+model Database {
+  id          String         @id @default(cuid())
+  pageId      String?        @unique
+  title       String         @default("Untitled Database")
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  page        Page?          @relation("PageDatabase", fields: [pageId], references: [id], onDelete: Cascade)
+  properties  Property[]
+  rows        Row[]
+  views       DatabaseView[]
+}
+
+model Property {
+  id         String   @id @default(cuid())
+  databaseId String
+  name       String
+  type       String   // title, text, number, select, multi_select, status, date, checkbox, url, email, person, relation, rollup, formula
+  config     String   @default("{}") // JSON stringified options, format, formulaExpr, relationDbId, rollupTargetProp
+  order      Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  database   Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+
+  @@index([databaseId, order])
+}
+
+model Row {
+  id         String   @id @default(cuid())
+  databaseId String
+  pageId     String?  @unique // Every row is also a Page
+  properties String   @default("{}") // JSON stringified { [propId]: value }
+  order      Float    @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  database   Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+  page       Page?    @relation("RowAsPage", fields: [pageId], references: [id], onDelete: SetNull)
+
+  @@index([databaseId, order])
+}
+
+model DatabaseView {
+  id           String   @id @default(cuid())
+  databaseId   String
+  name         String   @default("Default View")
+  type         String   // table, board, calendar, gallery, list, timeline
+  filters      String   @default("[]") // JSON stringified [{ propertyId, operator, value }]
+  sorts        String   @default("[]") // JSON stringified [{ propertyId, direction }]
+  grouping     String   @default("{}") // JSON stringified { propertyId }
+  visibleProps String   @default("[]") // JSON stringified [propertyId]
+  order        Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  database     Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id           String   @id @default(cuid())
+  pageId       String
+  blockId      String?
+  authorName   String   @default("Anonymous")
+  authorAvatar String?
+  content      String
+  resolved     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  page         Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  block        Block?   @relation(fields: [blockId], references: [id], onDelete: Cascade)
+}
+
+model PageSnapshot {
+  id        String   @id @default(cuid())
+  pageId    String
+  title     String
+  content   String   // JSON stringified snapshot of blocks
+  createdAt DateTime @default(now())
+
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+}

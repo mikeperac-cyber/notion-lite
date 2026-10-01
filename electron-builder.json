@@ -1,0 +1,31 @@
+{
+  "appId": "com.notionlite.app",
+  "productName": "Notion Lite",
+  "directories": {
+    "output": "dist-electron"
+  },
+  "asar": true,
+  "asarUnpack": ["**/*.node"],
+  "files": [
+    "electron/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": ".next/standalone",
+      "to": "standalone"
+    }
+  ],
+  "publish": [{ "provider": "github", "owner": "mikeperac-cyber", "repo": "notion-lite", "releaseType": "release" }],
+  "win": {
+    "icon": "electron/icon.ico",
+    "target": ["nsis", "portable"]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Notion Lite"
+  }
+}
