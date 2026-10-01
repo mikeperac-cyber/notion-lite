@@ -29,6 +29,8 @@ Workspace data is stored in the Windows user data folder for Notion Lite. Open *
 
 Use the visible **Delete** button in a page header or the trash icon beside a page in the sidebar to move it to Trash. Trash can restore pages. In the editor, type `/` to open commands, then use the arrow keys and Enter to choose a block. The **Link to Page** command inserts an internal link; linked pages list their backlinks. The page organization panel also lets you nest a page in a notebook, add tags, and create tasks with optional due times. The sidebar can filter pages by tag. When the Windows app is running, due tasks raise a desktop notification that opens their page.
 
+The template gallery includes Sprint Tracker, an architecture RFC, Meeting Notes, and five productivity starters: Project Planner, Daily Planner, Weekly Review, Habit Tracker, and Reading List. Document templates seed editable blocks; database templates seed properties and useful views.
+
 Backups are versioned ZIP files with a consistent SQLite snapshot, local image attachments, and a manifest. Restore validates the archive and saves the previous workspace in a `rollback-*` folder before restarting. Page export supports Markdown, HTML, and JSON. Markdown and HTML export copy referenced local images into an adjacent assets folder.
 
 ## AI providers
