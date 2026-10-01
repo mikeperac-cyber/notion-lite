@@ -4,7 +4,7 @@ import { refreshSearchPage } from "@/lib/search";
 import { ensureSyncedTable } from "@/lib/schema-upgrade";
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { pageId: string } }
 ) {
   try {

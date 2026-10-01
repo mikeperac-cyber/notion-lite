@@ -35,20 +35,16 @@ export function RowModal({
   onDeleteRow,
 }: RowModalProps) {
   const [rowPage, setRowPage] = useState<PageSchema | null>(null);
-  const [loadingPage, setLoadingPage] = useState(false);
-
   const pageId = row?.pageId;
 
   useEffect(() => {
     if (!open) { setRowPage(null); return; }
     if (!pageId) return;
     let alive = true;
-    setLoadingPage(true);
     fetch(`/api/pages/${pageId}`)
       .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then((data) => { if (alive) setRowPage(data); })
       .catch((error) => { if (alive) console.error(error); })
-      .finally(() => { if (alive) setLoadingPage(false); });
     return () => { alive = false; };
   }, [pageId, open]);
 

@@ -104,11 +104,11 @@ export async function POST(
 }
 
 export async function PATCH(
-  req: Request,
+  _req: Request,
   { params }: { params: { databaseId: string } }
 ) {
   try {
-    const body = await req.json();
+    const body = await _req.json();
     const { rowId, properties, order } = body;
 
     const existingRow = await prisma.row.findUnique({
@@ -186,11 +186,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  req: Request,
+  _req: Request,
   { params }: { params: { databaseId: string } }
 ) {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(_req.url);
     const rowId = searchParams.get("rowId");
     if (!rowId) {
       return NextResponse.json({ error: "Missing rowId" }, { status: 400 });

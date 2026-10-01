@@ -19,7 +19,7 @@ async function configuration(): Promise<{ provider: Provider; model: string; key
   return { provider, model, key };
 }
 
-async function requestJson(url: string, key: string, body: unknown, headers: Record<string, string> = {}) {
+async function requestJson(url: string, _key: string, body: unknown, headers: Record<string, string> = {}) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },

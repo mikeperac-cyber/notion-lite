@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { refreshSearchPage } from "@/lib/search";
 
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: { pageId: string } }
 ) {
   try {

@@ -46,7 +46,7 @@ const VIEW_ICONS: Record<ViewType, any> = {
   timeline: Clock,
 };
 
-export function DatabaseContainer({ database: initialDb, onRefresh }: DatabaseContainerProps) {
+export function DatabaseContainer({ database: initialDb }: DatabaseContainerProps) {
   const [database, setDatabase] = useState<DatabaseSchema>(initialDb);
   const [activeViewId, setActiveViewId] = useState<string>(
     initialDb.views[0]?.id || "default"

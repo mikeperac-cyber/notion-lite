@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { pageId: string } }
 ) {
   try {
@@ -23,12 +23,12 @@ export async function GET(
 }
 
 export async function POST(
-  req: Request,
+  _req: Request,
   { params }: { params: { pageId: string } }
 ) {
   try {
     const { pageId } = params;
-    const body = await req.json();
+    const body = await _req.json();
     const { content, authorName = "You", authorAvatar } = body;
 
     if (!content || !content.trim()) {

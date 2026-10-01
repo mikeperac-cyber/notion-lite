@@ -109,7 +109,6 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
   const [linkChoices, setLinkChoices] = useState<Array<{ id: string; title: string; icon: string | null }>>([]);
   const [linkQuery, setLinkQuery] = useState("");
@@ -371,7 +370,6 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
     const selectedText = editor.state.doc.textBetween(from, to, " ");
     const context = selectedText || editor.getText();
 
-    setAiLoading(true);
     try {
       const res = await fetch("/api/ai", {
         method: "POST",
@@ -397,10 +395,8 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
     } catch (err) {
       console.error(err);
       window.alert(err instanceof Error ? err.message : "AI request failed");
-    } finally {
-      setAiLoading(false);
-      setAiMenuOpen(false);
     }
+    setAiMenuOpen(false);
   };
 
   return (
