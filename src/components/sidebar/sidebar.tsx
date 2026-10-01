@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -35,6 +35,9 @@ import { PageSchema } from "@/types";
 export function Sidebar() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const [taggedPages, setTaggedPages] = useState<Array<{ id: string; title: string; icon: string | null; tags: string[] }>>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
   const {
     currentWorkspace,
     setCurrentWorkspace,
@@ -69,6 +72,21 @@ export function Sidebar() {
   useEffect(() => {
     loadWorkspace();
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    const loadTags = async () => {
+      try {
+        const response = await fetch("/api/tags");
+        if (!response.ok) return;
+        const data = await response.json();
+        setAvailableTags(data.tags || []);
+        setTaggedPages(data.pages || []);
+      } catch {}
+    };
+    void loadTags();
+    window.addEventListener("pages-meta-updated", loadTags);
+    return () => window.removeEventListener("pages-meta-updated", loadTags);
+  }, []);
 
   const handleCreatePage = async (isDatabase = false) => {
     try {
@@ -183,6 +201,14 @@ export function Sidebar() {
 
         {/* Pages Navigation Tree */}
         <div className="flex-1 overflow-hidden flex flex-col pt-2">
+          {availableTags.length > 0 && <div className="px-3 pb-2 border-b border-border/50">
+            <p className="text-[11px] font-semibold tracking-wider text-zinc-400 uppercase mb-1">Tags</p>
+            <div className="flex flex-wrap gap-1">{availableTags.map(tag => <button key={tag} onClick={() => setActiveTag(activeTag === tag ? null : tag)} className={`rounded-full px-2 py-0.5 text-[11px] ${activeTag === tag ? "bg-indigo-600 text-white" : "bg-zinc-200 dark:bg-zinc-800"}`}>{tag}</button>)}</div>
+          </div>}
+          {activeTag ? <ScrollArea className="flex-1 px-2"><div className="py-2 space-y-1">
+            <button onClick={() => setActiveTag(null)} className="text-xs text-indigo-600 px-2 py-1">Clear tag filter</button>
+            {taggedPages.filter(page => page.tags.includes(activeTag)).map(page => <Link key={page.id} href={`/editor/${page.id}`} className="block rounded px-2 py-1 text-xs hover:bg-muted">{page.icon || "📄"} {page.title}</Link>)}
+          </div></ScrollArea> : <>
           {/* Favorites Section */}
           {favoritePages.length > 0 && (
             <div className="mb-2">
@@ -231,6 +257,7 @@ export function Sidebar() {
               )}
             </div>
           </ScrollArea>
+          </>}
         </div>
 
         {/* Footer Actions */}

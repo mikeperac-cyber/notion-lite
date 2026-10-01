@@ -36,7 +36,8 @@ try {
   const created = await (await request("/api/pages", "POST", { title: "Unique Search Fixture" })).json();
   assert(created.id);
   const page = await (await request(`/api/pages/${created.id}`)).json();
-  const saved = await (await request("/api/blocks", "POST", { pageId: created.id, deletedBlockIds: page.blocks.map(block => block.id), changedBlocks: [{ id: "smoke-heading", type: "heading_1", order: 0, content: { text: "Asterism fixture", node: { type: "heading", attrs: { level: 1, id: "smoke-heading" }, content: [{ type: "text", text: "Asterism fixture" }] } } }] })).json();
+  const headingId = crypto.randomUUID();
+  const saved = await (await request("/api/blocks", "POST", { pageId: created.id, deletedBlockIds: page.blocks.map(block => block.id), changedBlocks: [{ id: headingId, type: "heading_1", order: 0, content: { text: "Asterism fixture", node: { type: "heading", attrs: { level: 1, id: headingId }, content: [{ type: "text", text: "Asterism fixture" }] } } }] })).json();
   assert(saved.success);
   const loaded = await (await request(`/api/pages/${created.id}`)).json();
   assert.equal(loaded.blocks[0].content.node.content[0].text, "Asterism fixture");
@@ -53,6 +54,29 @@ try {
   assert(undoHistory.snapshots.length > history.snapshots.length);
   const noKey = await fetch(`${base}/api/ai`, { method: "POST", headers: { "x-internal-secret": secret, "Content-Type": "application/json" }, body: JSON.stringify({ mode: "summarize", contextText: "Test" }) });
   assert.equal(noKey.status, 409);
+  const taskId = crypto.randomUUID();
+  const dueAt = new Date(Date.now() - 60_000).toISOString();
+  await request(`/api/pages/${created.id}/meta`, "PATCH", { tags: ["Reference", "Personal"], tasks: [{ id: taskId, title: "Review note", dueAt, completed: false, notified: false }] });
+  const tags = await (await request("/api/tags")).json();
+  assert(tags.tags.includes("Reference"));
+  const due = await (await request("/api/reminders/due")).json();
+  assert(due.due.some(task => task.taskId === taskId));
+  await request("/api/reminders/due", "POST", { pageId: created.id, taskId });
+  const afterNotice = await (await request("/api/reminders/due")).json();
+  assert(!afterNotice.due.some(task => task.taskId === taskId));
+
+  const linkingPage = await (await request("/api/pages", "POST", { title: "Link source" })).json();
+  const linkBlockId = crypto.randomUUID();
+  const linkedNode = { type: "paragraph", attrs: { id: linkBlockId }, content: [{ type: "text", text: "Unique Search Fixture", marks: [{ type: "link", attrs: { href: `/editor/${created.id}` } }] }] };
+  await request("/api/blocks", "POST", { pageId: linkingPage.id, changedBlocks: [{ id: linkBlockId, type: "paragraph", order: 0, content: { text: "Unique Search Fixture", node: linkedNode } }] });
+  const backlinks = await (await request(`/api/pages/${created.id}/backlinks`)).json();
+  assert(backlinks.pages.some(page => page.id === linkingPage.id));
+  await request(`/api/pages/${linkingPage.id}`, "PATCH", { parentId: created.id });
+  const cycle = await fetch(`${base}/api/pages/${created.id}`, { method: "PATCH", headers: { "x-internal-secret": secret, "Content-Type": "application/json" }, body: JSON.stringify({ parentId: linkingPage.id }) });
+  assert.equal(cycle.status, 400);
+  await request(`/api/pages/${linkingPage.id}`, "DELETE");
+  const trash = await (await request("/api/trash")).json();
+  assert(trash.pages.some(page => page.id === linkingPage.id));
   const backup = await (await request("/api/backup")).arrayBuffer();
   assert.equal(Buffer.from(backup).subarray(0, 16).toString(), "SQLite format 3\0");
   const attachmentId = `${crypto.randomUUID()}.png`;
@@ -78,7 +102,7 @@ try {
   const rollup = await (await request(`/api/databases/${source.database.id}/properties`, "POST", { name: "Count", type: "rollup", config: { rollupRelationPropId: relation.id, rollupTargetPropId: target.database.properties[0].id, rollupFunction: "count_all" } })).json();
   const value = await (await request(`/api/databases/${source.database.id}/rollup?rowId=${sourceRow.id}&propertyId=${rollup.id}`)).json();
   assert.equal(value.value, 1);
-  console.log("API smoke passed: page save, FTS, history restore, backup and attachment roundtrip, relation, rollup, AI unconfigured state");
+  console.log("API smoke passed: rich save, FTS, history restore, backup and attachments, links, tags, reminders, notebook cycles, trash, relation, rollup, AI unconfigured state");
 } finally {
   server.kill();
   await new Promise(resolve => { if (server.exitCode !== null) resolve(); else { server.once("exit", resolve); setTimeout(resolve, 5000); } });

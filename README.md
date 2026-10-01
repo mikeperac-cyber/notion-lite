@@ -25,6 +25,10 @@ Install the versioned `dist-electron/Notion Lite Setup *.exe`. The installer add
 
 Workspace data is stored in the Windows user data folder for Notion Lite. Open **Settings** to see the exact folder, choose the theme and close behavior, import Markdown, and create or restore a backup. Closing the window hides it in the tray by default; choose **Quit** from the tray or **Exit Notion Lite** from the File menu to stop it. `Ctrl+Alt+Space` reveals Search while the window is hidden.
 
+## Pages and notes
+
+Use the visible **Delete** button in a page header or the trash icon beside a page in the sidebar to move it to Trash. Trash can restore pages. In the editor, type `/` to open commands, then use the arrow keys and Enter to choose a block. The **Link to Page** command inserts an internal link; linked pages list their backlinks. The page organization panel also lets you nest a page in a notebook, add tags, and create tasks with optional due times. The sidebar can filter pages by tag. When the Windows app is running, due tasks raise a desktop notification that opens their page.
+
 Backups are versioned ZIP files with a consistent SQLite snapshot, local image attachments, and a manifest. Restore validates the archive and saves the previous workspace in a `rollback-*` folder before restarting. Page export supports Markdown, HTML, and JSON. Markdown and HTML export copy referenced local images into an adjacent assets folder.
 
 ## AI providers
@@ -45,4 +49,4 @@ node scripts/prepare-standalone.js
 node scripts/smoke-api.mjs
 ```
 
-The smoke test starts the standalone server against a temporary copy of the clean database and checks rich block persistence, search, history, snapshot backup, relations, and rollups.
+The smoke test starts the standalone server against a temporary copy of the clean database and checks rich block persistence, search, history, snapshot backup, relations, rollups, links, tags, reminders, notebook moves, and Trash.

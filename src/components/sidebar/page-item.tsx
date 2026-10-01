@@ -17,6 +17,8 @@ import {
 import { PageSchema } from "@/types";
 import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,10 +35,19 @@ interface PageItemProps {
 export function PageItem({ page, depth = 0 }: PageItemProps) {
   const router = useRouter();
   const [isExpanded, setIsExpanded] = useState(false);
-  const { activePageId, removePageFromTree, addPageToTree, updatePageInTree, trashCount, setTrashCount } = useAppStore();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const { activePageId, removePageFromTree, setPagesTree, updatePageInTree, setTrashCount } = useAppStore();
   const isActive = activePageId === page.id;
   const hasChildren = page.children && page.children.length > 0;
   const isDatabase = Boolean(page.databaseId || page.database);
+  const refreshWorkspace = async () => {
+    const response = await fetch("/api/workspace");
+    if (!response.ok) throw new Error("Could not refresh pages");
+    const workspace = await response.json();
+    setPagesTree(workspace.pages || []);
+    setTrashCount(workspace.trashCount || 0);
+  };
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -57,11 +68,14 @@ export function PageItem({ page, depth = 0 }: PageItemProps) {
           workspaceId: page.workspaceId,
         }),
       });
+      if (!res.ok) throw new Error("Could not create a subpage");
       const newPage = await res.json();
       setIsExpanded(true);
+      await refreshWorkspace();
       router.push(`/editor/${newPage.id}`);
     } catch (err) {
       console.error(err);
+      window.alert(err instanceof Error ? err.message : "Could not create a subpage");
     }
   };
 
@@ -70,13 +84,16 @@ export function PageItem({ page, depth = 0 }: PageItemProps) {
     const newFav = !page.isFavorite;
     updatePageInTree(page.id, { isFavorite: newFav });
     try {
-      await fetch(`/api/pages/${page.id}`, {
+      const response = await fetch(`/api/pages/${page.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isFavorite: newFav }),
       });
+      if (!response.ok) throw new Error("Could not update favorite");
     } catch (err) {
       console.error(err);
+      updatePageInTree(page.id, { isFavorite: !newFav });
+      window.alert(err instanceof Error ? err.message : "Could not update favorite");
     }
   };
 
@@ -84,34 +101,44 @@ export function PageItem({ page, depth = 0 }: PageItemProps) {
     e.stopPropagation();
     try {
       const res = await fetch(`/api/pages/${page.id}/duplicate`, { method: "POST" });
-      if (res.ok) {
-        const cloned = await res.json();
-        addPageToTree(cloned);
-        router.push(`/editor/${cloned.id}`);
-      }
+      if (!res.ok) throw new Error("Could not duplicate page");
+      const cloned = await res.json();
+      await refreshWorkspace();
+      router.push(`/editor/${cloned.id}`);
     } catch (err) {
       console.error(err);
+      window.alert(err instanceof Error ? err.message : "Could not duplicate page");
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const openDeleteDialog = (e: React.MouseEvent) => {
     e.stopPropagation();
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
     try {
-      await fetch(`/api/pages/${page.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/pages/${page.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not move the page to Trash");
       removePageFromTree(page.id);
-      setTrashCount(trashCount + 1);
+      await refreshWorkspace();
+      window.dispatchEvent(new Event("pages-meta-updated"));
       if (isActive) {
         router.push("/");
       }
+      setDeleteDialogOpen(false);
     } catch (err) {
       console.error(err);
+      window.alert(err instanceof Error ? err.message : "Could not move the page to Trash");
+    } finally {
+      setDeleting(false);
     }
   };
 
   return (
     <div className="select-none">
-      <Link
-        href={`/editor/${page.id}`}
+      <div
         className={cn(
           "group flex items-center justify-between py-1 px-2 rounded-md text-sm font-medium transition-colors hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 text-zinc-700 dark:text-zinc-300",
           isActive && "bg-zinc-200/80 dark:bg-zinc-800 text-zinc-900 dark:text-white font-semibold"
@@ -129,13 +156,16 @@ export function PageItem({ page, depth = 0 }: PageItemProps) {
           >
             <ChevronRight className="h-3.5 w-3.5" />
           </button>
-          <span className="text-base leading-none">
-            {page.icon || (isDatabase ? "📊" : "📄")}
-          </span>
-          <span className="truncate text-sm">{page.title || "Untitled"}</span>
+          <Link href={`/editor/${page.id}`} className="flex items-center gap-1.5 min-w-0 flex-1">
+            <span className="text-base leading-none">{page.icon || (isDatabase ? "📊" : "📄")}</span>
+            <span className="truncate text-sm">{page.title || "Untitled"}</span>
+          </Link>
         </div>
 
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5">
+          <button onClick={openDeleteDialog} aria-label={`Move ${page.title || "Untitled"} to Trash`} title="Move to Trash" className="p-1 rounded text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
           <button
             onClick={handleToggleFavorite}
             title={page.isFavorite ? "Remove from Favorites" : "Add to Favorites"}
@@ -174,14 +204,25 @@ export function PageItem({ page, depth = 0 }: PageItemProps) {
                 Duplicate
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleDelete} className="text-red-600 focus:text-red-600">
+              <DropdownMenuItem onClick={openDeleteDialog} className="text-red-600 focus:text-red-600">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Move to Trash
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </Link>
+      </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Move page to Trash?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{page.title || "Untitled"} can be restored from Trash.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void handleDelete()} disabled={deleting}>{deleting ? "Moving..." : "Move to Trash"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {isExpanded && hasChildren && (
         <div className="flex flex-col">

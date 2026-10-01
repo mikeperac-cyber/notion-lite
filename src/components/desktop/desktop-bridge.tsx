@@ -111,11 +111,12 @@ export function DesktopBridge() {
         if (command === "trash") setTrashModalOpen(true);
         if (command === "export") window.dispatchEvent(new Event("desktop-export"));
         if (command === "settings") { await refresh(); setOpen(true); }
+        if (command.startsWith("open-page:")) router.push(`/editor/${encodeURIComponent(command.slice("open-page:".length))}`);
       } catch (error: any) { setStatus(error.message || "Desktop action failed"); setOpen(true); }
     });
     api.ready();
     return off;
-  }, [createPage, refresh, setSearchModalOpen, setTrashModalOpen]);
+  }, [createPage, refresh, router, setSearchModalOpen, setTrashModalOpen]);
   useEffect(() => window.electronAPI?.onUpdateStatus(setUpdateStatus), []);
 
   if (typeof window === "undefined" || !window.electronAPI) return null;

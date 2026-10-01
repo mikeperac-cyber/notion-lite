@@ -53,6 +53,7 @@ model Page {
   row          Row?            @relation("RowAsPage")
   comments     Comment[]
   history      PageSnapshot[]
+  metadata     PageMeta?
 
   @@index([workspaceId, parentId])
 }
@@ -80,6 +81,14 @@ model SyncedContent {
   id        String   @id
   content   String
   updatedAt DateTime @updatedAt
+}
+
+model PageMeta {
+  pageId    String   @id
+  tags      String   @default("[]")
+  tasks     String   @default("[]")
+  updatedAt DateTime @updatedAt
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
 }
 
 model Database {

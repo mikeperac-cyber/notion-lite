@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, shell, nativeImage, ipcMain, dialog, globalShortcut } = require("electron");
+const { app, BrowserWindow, Menu, Tray, shell, nativeImage, ipcMain, dialog, globalShortcut, Notification } = require("electron");
 const path = require("path");
 const { spawn, fork } = require("child_process");
 const http = require("http");
@@ -199,6 +199,40 @@ function fetchSnapshot() {
       response.on("error", reject);
     }).on("error", reject);
   });
+}
+function reminderRequest(method, route, body) {
+  return new Promise((resolve, reject) => {
+    const payload = body ? Buffer.from(JSON.stringify(body)) : null;
+    const request = http.request(`${startUrl}${route}`, { method, headers: { "x-internal-secret": internalSecret, ...(payload ? { "Content-Type": "application/json", "Content-Length": payload.length } : {}) }, timeout: 5000 }, response => {
+      const chunks = [];
+      response.on("data", chunk => chunks.push(chunk));
+      response.on("end", () => {
+        if (response.statusCode !== 200) return reject(new Error(`Reminder request returned ${response.statusCode}`));
+        try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); } catch (error) { reject(error); }
+      });
+    });
+    request.on("error", reject);
+    if (payload) request.write(payload);
+    request.end();
+  });
+}
+let checkingReminders = false;
+const activeReminders = new Set();
+async function checkDueReminders() {
+  if (checkingReminders || !Notification.isSupported()) return;
+  checkingReminders = true;
+  try {
+    const { due } = await reminderRequest("GET", "/api/reminders/due");
+    for (const task of due || []) {
+      const notice = new Notification({ title: `Notion Lite: ${task.title}`, body: `Due in ${task.pageTitle}` });
+      activeReminders.add(notice);
+      notice.on("click", () => showWindow(`open-page:${task.pageId}`));
+      notice.on("close", () => activeReminders.delete(notice));
+      notice.show();
+      await reminderRequest("POST", "/api/reminders/due", { pageId: task.pageId, taskId: task.taskId });
+    }
+  } catch (error) { logError("reminders", error); }
+  finally { checkingReminders = false; }
 }
 ipcMain.handle("desktop:create-backup", async (event) => {
   trusted(event);
@@ -668,12 +702,15 @@ function createAppMenu() {
 }
 
 app.whenReady().then(() => {
+  if (process.platform === "win32") app.setAppUserModelId("com.notionlite.app");
   loadSettings();
   ensureDesktopShortcut();
   setShortcut();
   createTray();
   startNextServer(() => {
     createWindow();
+    setTimeout(checkDueReminders, 5000);
+    setInterval(checkDueReminders, 60 * 1000);
     if (app.isPackaged) setTimeout(() => autoUpdater.checkForUpdates().catch(error => logError("update", error)), 10000);
   });
 

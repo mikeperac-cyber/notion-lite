@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useParams, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/sidebar/sidebar";
 import { PageHeader } from "@/components/editor/page-header";
+import { PageOrganizer } from "@/components/editor/page-organizer";
 import { BlockEditor } from "@/components/editor/block-editor";
 import { DatabaseContainer } from "@/components/database/database-container";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -96,6 +97,7 @@ export default function EditorPage() {
           <div className="flex-1 flex flex-col pb-24">
             {/* Page Header (Cover, Icon, Title, Publish) */}
             <PageHeader page={page} onUpdate={handleUpdatePage} />
+            <PageOrganizer key={page.id} pageId={page.id} initialParentId={page.parentId || null} />
 
             {/* Page Body Container with dynamic width and typography */}
             <div

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useEditor, EditorContent, BubbleMenu } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
@@ -32,6 +33,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SlashCommandList, getSuggestionItems, CommandItem } from "./slash-command";
 import { BlockSchema } from "@/types";
 import { Callout, ToggleBlock, Column, Columns, MermaidBlock, MathBlock, ProgressBlock, VideoEmbed, Bookmark, KeyboardBadge, SyncedBlock } from "./rich-nodes";
@@ -91,7 +93,7 @@ const GlobalId = Extension.create({
   addGlobalAttributes() {
     return [
       {
-        types: ['heading', 'paragraph', 'bulletList', 'orderedList', 'taskList', 'taskItem', 'codeBlock', 'blockquote', 'horizontalRule', 'table', 'image'],
+        types: ['heading', 'paragraph', 'bulletList', 'orderedList', 'taskList', 'taskItem', 'codeBlock', 'blockquote', 'horizontalRule', 'table', 'image', 'callout', 'toggleBlock', 'columns', 'mermaidBlock', 'mathBlock', 'progressBlock', 'videoEmbed', 'bookmark', 'syncedBlock'],
         attributes: {
           id: {
             default: null,
@@ -108,9 +110,13 @@ const GlobalId = Extension.create({
 });
 
 export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEditorProps) {
+  const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [linkChoices, setLinkChoices] = useState<Array<{ id: string; title: string; icon: string | null }>>([]);
+  const [linkQuery, setLinkQuery] = useState("");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Parse initial content from block models into HTML or JSON
@@ -155,11 +161,19 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
           render: () => {
             let component: ReactRenderer | null = null;
             let popup: TippyInstance[] | null = null;
+            let selectedIndex = 0;
+            let currentProps: any = null;
+            const updateList = () => component?.updateProps({ ...currentProps, selectedIndex, onHover: (index: number) => {
+              selectedIndex = index;
+              updateList();
+            } });
 
             return {
               onStart: (props: any) => {
+                currentProps = props;
+                selectedIndex = 0;
                 component = new ReactRenderer(SlashCommandList, {
-                  props,
+                  props: { ...props, selectedIndex, onHover: (index: number) => { selectedIndex = index; updateList(); } },
                   editor: props.editor,
                 });
 
@@ -179,7 +193,9 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
               },
 
               onUpdate(props: any) {
-                component?.updateProps(props);
+                currentProps = props;
+                selectedIndex = 0;
+                updateList();
 
                 if (!props.clientRect) {
                   return;
@@ -191,11 +207,26 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
               },
 
               onKeyDown(props: any) {
+                const items: CommandItem[] = currentProps?.items || [];
                 if (props.event.key === "Escape") {
                   popup?.[0]?.hide();
                   return true;
                 }
-                return (component?.ref as any)?.onKeyDown?.(props.event);
+                if (props.event.key === "ArrowDown" && items.length) {
+                  selectedIndex = (selectedIndex + 1) % items.length;
+                  updateList();
+                  return true;
+                }
+                if (props.event.key === "ArrowUp" && items.length) {
+                  selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                  updateList();
+                  return true;
+                }
+                if (props.event.key === "Enter" && items[selectedIndex]) {
+                  currentProps.command(items[selectedIndex]);
+                  return true;
+                }
+                return false;
               },
 
               onExit() {
@@ -211,8 +242,11 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
     onUpdate: ({ editor }) => {
       if (readOnly) return;
       const missing: Array<{ position: number; node: any }> = [];
+      const seenIds = new Set<string>();
       editor.state.doc.forEach((node, position) => {
-        if (!node.attrs.id) missing.push({ position, node });
+        const id = node.attrs.id;
+        if (!id || seenIds.has(id)) missing.push({ position, node });
+        else seenIds.add(id);
       });
       if (missing.length) {
         const transaction = editor.state.tr;
@@ -308,6 +342,24 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
     window.addEventListener("ai-insert", insertAi);
     return () => window.removeEventListener("ai-insert", insertAi);
   }, [editor]);
+
+  useEffect(() => {
+    const openPicker = async () => {
+      const response = await fetch("/api/pages/choices");
+      if (!response.ok) { window.alert("Could not load pages"); return; }
+      const data = await response.json();
+      setLinkChoices((data.pages || []).filter((choice: { id: string }) => choice.id !== pageId));
+      setLinkQuery("");
+      setLinkPickerOpen(true);
+    };
+    window.addEventListener("open-page-link-picker", openPicker);
+    return () => window.removeEventListener("open-page-link-picker", openPicker);
+  }, [pageId]);
+
+  const insertPageLink = (choice: { id: string; title: string }) => {
+    editor?.chain().focus().insertContent({ type: "text", text: choice.title, marks: [{ type: "link", attrs: { href: `/editor/${choice.id}` } }] }).run();
+    setLinkPickerOpen(false);
+  };
 
   const handleAiAction = async (action: string) => {
     if (!editor) return;
@@ -457,9 +509,22 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
       )}
 
       {/* Editor Main Canvas */}
-      <div className="py-4">
+      <div className="py-4" onClickCapture={event => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        const target = event.target as HTMLElement;
+        const link = target.closest("a[href^='/editor/']") as HTMLAnchorElement | null;
+        if (link) { event.preventDefault(); router.push(link.getAttribute("href")!); }
+      }}>
         <EditorContent editor={editor} />
       </div>
+      <Dialog open={linkPickerOpen} onOpenChange={setLinkPickerOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Link to a page</DialogTitle></DialogHeader>
+          <input autoFocus aria-label="Find page" value={linkQuery} onChange={event => setLinkQuery(event.target.value)} placeholder="Search pages" className="w-full rounded border border-border bg-background px-3 py-2 text-sm" />
+          <div className="max-h-60 overflow-y-auto space-y-1">{linkChoices.filter(choice => choice.title.toLowerCase().includes(linkQuery.toLowerCase())).map(choice => <button key={choice.id} onClick={() => insertPageLink(choice)} className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted">{choice.icon || "📄"} {choice.title}</button>)}</div>
+          <p className="text-xs text-muted-foreground">Ctrl+click a page link in the editor to open it.</p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

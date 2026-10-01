@@ -63,7 +63,7 @@ const EMOJI_PRESETS = [
 
 export function PageHeader({ page, onUpdate }: PageHeaderProps) {
   const router = useRouter();
-  const { updatePageInTree, addPageToTree, setCommentsDrawerOpen } = useAppStore();
+  const { updatePageInTree, addPageToTree, removePageFromTree, setTrashCount, setCommentsDrawerOpen } = useAppStore();
   const [title, setTitle] = useState(page.title);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -76,6 +76,22 @@ export function PageHeader({ page, onUpdate }: PageHeaderProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const handleMoveToTrash = async () => {
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/pages/${page.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Could not move the page to Trash");
+      removePageFromTree(page.id);
+      setTrashCount(useAppStore.getState().trashCount + 1);
+      window.dispatchEvent(new Event("pages-meta-updated"));
+      router.push("/");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not move the page to Trash");
+      setDeleting(false);
+    }
+  };
   const chooseCover = async () => {
     const picked = await window.electronAPI?.pickAttachment();
     if (picked) handleSetCover(picked.url);
@@ -347,6 +363,10 @@ export function PageHeader({ page, onUpdate }: PageHeaderProps) {
               Export
             </Button>
             <Button variant="ghost" size="xs" onClick={() => setHistoryOpen(true)} className="h-7 text-xs">History</Button>
+            <Button variant="ghost" size="xs" onClick={() => setDeleteDialogOpen(true)} disabled={deleting} title="Move this page to Trash" className="h-7 text-xs gap-1 text-red-600 hover:text-red-700">
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </Button>
 
             <Button
               variant="ghost"
@@ -488,6 +508,16 @@ export function PageHeader({ page, onUpdate }: PageHeaderProps) {
       </Dialog>
 
       {/* Export Modal */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Move page to Trash?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{page.title || "Untitled"} can be restored from Trash.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => void handleMoveToTrash()} disabled={deleting}>{deleting ? "Moving..." : "Move to Trash"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <PageExportModal
         page={page}
         open={exportModalOpen}

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import React from "react";
 import { Editor } from "@tiptap/react";
-import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Code2, Quote, Minus, Keyboard, Lightbulb, ChevronRight, Columns, Table2, GitFork, Calculator, BarChart2, Video, Image as ImageIcon, Bookmark as BookmarkIcon, RefreshCw, Sparkles, ListChecks } from "lucide-react";
+import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Code2, Quote, Minus, Keyboard, Lightbulb, ChevronRight, Columns, Table2, GitFork, Calculator, BarChart2, Video, Image as ImageIcon, Bookmark as BookmarkIcon, RefreshCw, Sparkles, ListChecks, Link2 } from "lucide-react";
 
 export interface CommandItem { title: string; description: string; category: "Basic" | "Callouts & Toggles" | "Advanced & Media" | "AI & Data"; icon: any; command: (editor: Editor) => void }
 const paragraph = (text = "") => ({ type: "paragraph", content: text ? [{ type: "text", text }] : [] });
@@ -38,6 +38,7 @@ export function getSuggestionItems(): CommandItem[] {
     item("Quote", "Quotation", "Basic", Quote, editor => editor.chain().focus().toggleBlockquote().run()),
     item("Divider", "Horizontal rule", "Basic", Minus, editor => editor.chain().focus().setHorizontalRule().run()),
     item("Keyboard Shortcut", "Inline keyboard badge", "Basic", Keyboard, editor => insert(editor, "keyboardBadge", { keys: window.prompt("Keys", "Ctrl+K") || "Ctrl+K" })),
+    item("Link to Page", "Insert a link to another page", "Basic", Link2, () => window.dispatchEvent(new Event("open-page-link-picker"))),
     ...(["Info", "Success", "Warning", "Danger"] as const).map((variant, index) => item(`${variant} Callout`, "Editable highlighted note", "Callouts & Toggles", Lightbulb, editor => insert(editor, "callout", { variant: variant.toLowerCase() }, [paragraph("Write a note...")]))),
     item("Toggle List", "Collapsible notes", "Callouts & Toggles", ChevronRight, editor => insert(editor, "toggleBlock", { open: true }, [paragraph("Toggle heading"), paragraph("Details...")])),
     item("2 Columns", "Two editable columns", "Advanced & Media", Columns, editor => insert(editor, "columns", { count: 2 }, [{ type: "column", content: [paragraph()] }, { type: "column", content: [paragraph()] }])),
@@ -55,15 +56,7 @@ export function getSuggestionItems(): CommandItem[] {
   ];
 }
 
-interface ListProps { items: CommandItem[]; command: (item: CommandItem) => void }
-export const SlashCommandList = forwardRef<{ onKeyDown: (event: KeyboardEvent) => boolean }, ListProps>(function SlashCommandList({ items, command }, ref) {
-  const [selected, setSelected] = useState(0);
-  useEffect(() => setSelected(0), [items]);
-  useImperativeHandle(ref, () => ({ onKeyDown(event) {
-    if (event.key === "ArrowDown") { setSelected(index => (index + 1) % Math.max(items.length, 1)); return true; }
-    if (event.key === "ArrowUp") { setSelected(index => (index - 1 + Math.max(items.length, 1)) % Math.max(items.length, 1)); return true; }
-    if (event.key === "Enter" && items[selected]) { command(items[selected]); return true; }
-    return false;
-  } }), [items, selected, command]);
-  return <div className="max-h-80 w-72 overflow-y-auto rounded-lg border bg-popover p-1 shadow-xl">{items.length ? items.map((entry, index) => <button key={entry.title} onMouseEnter={() => setSelected(index)} onClick={() => command(entry)} className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${selected === index ? "bg-accent" : "hover:bg-accent"}`}><entry.icon className="h-4 w-4 shrink-0" /><span><strong className="block">{entry.title}</strong><small className="text-muted-foreground">{entry.description}</small></span></button>) : <p className="p-2 text-xs text-muted-foreground">No commands found.</p>}</div>;
-});
+interface ListProps { items: CommandItem[]; command: (item: CommandItem) => void; selectedIndex: number; onHover: (index: number) => void }
+export function SlashCommandList({ items, command, selectedIndex, onHover }: ListProps) {
+  return <div role="listbox" aria-label="Slash commands" className="max-h-80 w-72 overflow-y-auto rounded-lg border bg-popover p-1 shadow-xl">{items.length ? items.map((entry, index) => <button role="option" aria-selected={selectedIndex === index} key={entry.title} onMouseMove={() => onHover(index)} onMouseDown={event => event.preventDefault()} onClick={() => command(entry)} className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${selectedIndex === index ? "bg-accent" : "hover:bg-accent"}`}><entry.icon className="h-4 w-4 shrink-0" /><span><strong className="block">{entry.title}</strong><small className="text-muted-foreground">{entry.description}</small></span></button>) : <p className="p-2 text-xs text-muted-foreground">No commands found.</p>}</div>;
+}

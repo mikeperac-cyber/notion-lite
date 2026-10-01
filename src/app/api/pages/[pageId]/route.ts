@@ -145,6 +145,18 @@ export async function PATCH(
       parentId,
     } = body;
 
+    if (parentId !== undefined && parentId) {
+      const moving = await prisma.page.findUnique({ where: { id: pageId }, select: { workspaceId: true } });
+      if (!moving) return NextResponse.json({ error: "Page not found" }, { status: 404 });
+      let ancestorId: string | null = parentId;
+      while (ancestorId) {
+        if (ancestorId === pageId) return NextResponse.json({ error: "A page cannot be moved inside itself or one of its subpages" }, { status: 400 });
+        const ancestor: { id: string; parentId: string | null; workspaceId: string; isArchived: boolean } | null = await prisma.page.findUnique({ where: { id: ancestorId }, select: { id: true, parentId: true, workspaceId: true, isArchived: true } });
+        if (!ancestor || ancestor.workspaceId !== moving.workspaceId || ancestor.isArchived) return NextResponse.json({ error: "Notebook not found" }, { status: 400 });
+        ancestorId = ancestor.parentId;
+      }
+    }
+
     if (title !== undefined) {
       const previous = await prisma.page.findUnique({ where: { id: pageId }, include: { blocks: { orderBy: { order: "asc" } } } });
       if (previous && previous.title !== title) {

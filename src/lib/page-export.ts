@@ -1,7 +1,7 @@
 import { PageSchema } from "@/types";
 
 const escapeHtml = (value: unknown) => String(value ?? "").replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]!));
-const safeUrl = (value: unknown) => { const url = String(value || ""); return /^(https?:\/\/|\/api\/attachments\/)/i.test(url) ? url : ""; };
+const safeUrl = (value: unknown) => { const url = String(value || ""); return /^(https?:\/\/|\/api\/attachments\/|\/editor\/)/i.test(url) ? url : ""; };
 const children = (node: any) => (node?.content || []) as any[];
 const text = (node: any): string => (node?.text || "") + children(node).map(text).join("");
 const legacyNode = (block: any) => block.content?.node || { type: block.type.startsWith("heading_") ? "heading" : block.type === "code" ? "codeBlock" : "paragraph", attrs: block.type.startsWith("heading_") ? { level: Number(block.type.slice(-1)) } : {}, content: [{ type: "text", text: block.content?.text || block.content?.code || "" }] };
