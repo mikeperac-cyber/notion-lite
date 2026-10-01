@@ -24,6 +24,8 @@ model WorkspaceMember {
   userId      String
   role        String       @default("owner")
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 model Page {
@@ -55,7 +57,8 @@ model Page {
   history      PageSnapshot[]
   metadata     PageMeta?
 
-  @@index([workspaceId, parentId])
+  @@index([workspaceId, parentId, order])
+  @@index([workspaceId, isArchived, isFavorite])
 }
 
 model Block {
@@ -75,6 +78,7 @@ model Block {
   comments      Comment[]
 
   @@index([pageId, order])
+  @@index([pageId, parentId, order])
 }
 
 model SyncedContent {
@@ -149,6 +153,8 @@ model DatabaseView {
   updatedAt    DateTime @updatedAt
 
   database     Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+
+  @@index([databaseId, order])
 }
 
 model Comment {
@@ -164,6 +170,9 @@ model Comment {
 
   page         Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
   block        Block?   @relation(fields: [blockId], references: [id], onDelete: Cascade)
+
+  @@index([pageId])
+  @@index([blockId])
 }
 
 model PageSnapshot {
@@ -174,4 +183,6 @@ model PageSnapshot {
   createdAt DateTime @default(now())
 
   page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, createdAt])
 }

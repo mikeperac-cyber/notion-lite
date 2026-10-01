@@ -5,6 +5,7 @@
     "output": "dist-electron"
   },
   "asar": true,
+  "compression": "maximum",
   "asarUnpack": ["**/*.node"],
   "files": [
     "electron/**/*",
@@ -19,6 +20,7 @@
   "publish": [{ "provider": "github", "owner": "mikeperac-cyber", "repo": "notion-lite", "releaseType": "release" }],
   "win": {
     "icon": "electron/icon.ico",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "target": ["nsis", "portable"]
   },
   "nsis": {
