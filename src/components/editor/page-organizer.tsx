@@ -22,10 +22,15 @@ export function PageOrganizer({ pageId, initialParentId }: { pageId: string; ini
 
   useEffect(() => {
     let alive = true;
+    const loadJson = async (url: string) => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    };
     Promise.all([
-      fetch(`/api/pages/${pageId}/meta`).then(response => response.json()),
-      fetch("/api/pages/choices").then(response => response.json()),
-      fetch(`/api/pages/${pageId}/backlinks`).then(response => response.json()),
+      loadJson(`/api/pages/${pageId}/meta`),
+      loadJson("/api/pages/choices"),
+      loadJson(`/api/pages/${pageId}/backlinks`),
     ]).then(([meta, options, links]) => {
       if (!alive) return;
       setTags(meta.tags || []);

@@ -16,8 +16,9 @@ export async function GET(_request: Request, { params }: { params: { pageId: str
 }
 
 export async function PATCH(request: Request, { params }: { params: { pageId: string } }) {
-  await ensurePageMetaTable();
-  const body = await request.json();
+  try {
+    await ensurePageMetaTable();
+    const body = await request.json();
   const data: { tags?: string; tasks?: string } = {};
   if (body.tags !== undefined) {
     if (!Array.isArray(body.tags) || body.tags.length > 30 || !body.tags.every((tag: unknown) => typeof tag === "string" && tag.trim().length > 0 && tag.trim().length <= 40)) return NextResponse.json({ error: "Invalid tags" }, { status: 400 });
@@ -36,4 +37,8 @@ export async function PATCH(request: Request, { params }: { params: { pageId: st
     update: data,
   });
   return NextResponse.json({ tags: parse(meta.tags), tasks: parse(meta.tasks) });
+  } catch (error: any) {
+    console.error("Update Page Meta Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to update page meta" }, { status: 500 });
+  }
 }

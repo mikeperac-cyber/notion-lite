@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Search, FileText, Table as TableIcon, ArrowRight } from "lucide-react";
 import { useAppStore } from "@/lib/store";
@@ -35,39 +35,44 @@ export function SearchModal() {
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query]);
 
-  // Keyboard shortcut listener (Cmd+K / Ctrl+K)
+  // Keyboard shortcut listener (Cmd+K / Ctrl+K) — subscribed once, reads
+  // fresh state via getState instead of a stale closure.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setSearchModalOpen(!searchModalOpen);
+        setSearchModalOpen(!useAppStore.getState().searchModalOpen);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [searchModalOpen, setSearchModalOpen]);
+  }, [setSearchModalOpen]);
 
   // Reset selectedIndex on query change
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
 
-  // Flatten page tree
-  const flattenPages = (pages: PageSchema[]): PageSchema[] => {
-    let list: PageSchema[] = [];
-    for (const p of pages) {
-      list.push(p);
-      if (p.children && p.children.length > 0) {
-        list = list.concat(flattenPages(p.children));
+  // Flatten page tree (memoized: tree only changes on workspace updates)
+  const allPages = useMemo(() => {
+    const flatten = (pages: PageSchema[]): PageSchema[] => {
+      let list: PageSchema[] = [];
+      for (const p of pages) {
+        list.push(p);
+        if (p.children && p.children.length > 0) {
+          list = list.concat(flatten(p.children));
+        }
       }
-    }
-    return list;
-  };
+      return list;
+    };
+    return flatten(pagesTree);
+  }, [pagesTree]);
 
-  const allPages = flattenPages(pagesTree);
-  const filtered = query.trim()
-    ? matches.map(match => allPages.find(page => page.id === match.pageId) || ({ id: match.pageId, title: match.title } as PageSchema))
-    : allPages;
+  const filtered = useMemo(() => {
+    if (!query.trim()) return allPages;
+    const byId = new Map(allPages.map(page => [page.id, page]));
+    return matches.map(match => byId.get(match.pageId) || ({ id: match.pageId, title: match.title } as PageSchema));
+  }, [query, allPages, matches]);
 
   const handleSelect = (pageId: string) => {
     setSearchModalOpen(false);

@@ -14,17 +14,22 @@ function linksTo(value: unknown, target: string): boolean {
 }
 
 export async function GET(_request: Request, { params }: { params: { pageId: string } }) {
-  const target = `/editor/${params.pageId}`;
-  const candidates = await prisma.block.findMany({
-    where: { content: { contains: target }, page: { isArchived: false } },
-    select: { content: true, page: { select: { id: true, title: true, icon: true } } },
-  });
-  const pages = new Map<string, { id: string; title: string; icon: string | null }>();
-  for (const block of candidates) {
-    if (block.page.id === params.pageId) continue;
-    try {
-      if (linksTo(JSON.parse(block.content).node, target)) pages.set(block.page.id, block.page);
-    } catch {}
+  try {
+    const target = `/editor/${params.pageId}`;
+    const candidates = await prisma.block.findMany({
+      where: { content: { contains: target }, page: { isArchived: false } },
+      select: { content: true, page: { select: { id: true, title: true, icon: true } } },
+    });
+    const pages = new Map<string, { id: string; title: string; icon: string | null }>();
+    for (const block of candidates) {
+      if (block.page.id === params.pageId) continue;
+      try {
+        if (linksTo(JSON.parse(block.content).node, target)) pages.set(block.page.id, block.page);
+      } catch {}
+    }
+    return NextResponse.json({ pages: Array.from(pages.values()) });
+  } catch (error: any) {
+    console.error("List Backlinks Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to list backlinks" }, { status: 500 });
   }
-  return NextResponse.json({ pages: Array.from(pages.values()) });
 }

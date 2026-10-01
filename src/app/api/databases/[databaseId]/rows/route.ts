@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { refreshSearchPage } from "@/lib/search";
+import { parseJsonObject } from "@/lib/safe-json";
 
 export async function GET(_req: Request, { params }: { params: { databaseId: string } }) {
-  const rows = await prisma.row.findMany({ where: { databaseId: params.databaseId }, take: 500, orderBy: { order: "asc" }, include: { page: { select: { title: true } } } });
-  return NextResponse.json({ rows: rows.map(row => ({ id: row.id, title: row.page?.title || "Untitled", properties: JSON.parse(row.properties || "{}") })) });
+  try {
+    const rows = await prisma.row.findMany({ where: { databaseId: params.databaseId }, take: 500, orderBy: { order: "asc" }, include: { page: { select: { title: true } } } });
+    return NextResponse.json({ rows: rows.map(row => ({ id: row.id, title: row.page?.title || "Untitled", properties: parseJsonObject(row.properties) })) });
+  } catch (error: any) {
+    console.error("List Rows Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to list rows" }, { status: 500 });
+  }
 }
 
 export async function POST(
@@ -130,7 +136,7 @@ export async function PATCH(
     const mergedProps = { ...currentProps, ...properties };
     for (const property of existingRow.database.properties.filter(property => property.type === "relation" && properties && property.id in properties)) {
       const ids = properties[property.id];
-      const targetDatabaseId = JSON.parse(property.config || "{}").relationDatabaseId;
+      const targetDatabaseId = parseJsonObject(property.config).relationDatabaseId;
       if (!Array.isArray(ids) || !ids.every((id: unknown) => typeof id === "string")) return NextResponse.json({ error: "Relation must be a list of row IDs" }, { status: 400 });
       const count = await prisma.row.count({ where: { id: { in: ids }, databaseId: targetDatabaseId } });
       if (count !== new Set(ids).size) return NextResponse.json({ error: "Relation contains an unknown row" }, { status: 400 });

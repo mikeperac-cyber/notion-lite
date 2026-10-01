@@ -72,10 +72,8 @@ export function DatabaseContainer({ database: initialDb, onRefresh }: DatabaseCo
   // Sync state when initialDb changes from parent
   React.useEffect(() => {
     setDatabase(initialDb);
-    if (!activeViewId || !initialDb.views.some((v) => v.id === activeViewId)) {
-      setActiveViewId(initialDb.views[0]?.id || "default");
-    }
-  }, [initialDb, activeViewId]);
+    setActiveViewId((prev) => (!prev || !initialDb.views.some((v) => v.id === prev) ? initialDb.views[0]?.id || "default" : prev));
+  }, [initialDb]);
 
   const activeView = React.useMemo(() => {
     return database.views.find((v) => v.id === activeViewId) || database.views[0];
@@ -114,7 +112,9 @@ export function DatabaseContainer({ database: initialDb, onRefresh }: DatabaseCo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ properties: initialProps }),
       });
+      if (!res.ok) throw new Error("Could not add row");
       const newRow = await res.json();
+      if (!newRow?.id) throw new Error("Invalid row response");
       setDatabase((prev) => ({
         ...prev,
         rows: [...prev.rows, newRow],
@@ -126,17 +126,20 @@ export function DatabaseContainer({ database: initialDb, onRefresh }: DatabaseCo
 
   // Delete a row
   const handleDeleteRow = async (rowId: string) => {
+    const snapshot = database.rows;
     setDatabase((prev) => ({
       ...prev,
       rows: prev.rows.filter((r) => r.id !== rowId),
     }));
 
     try {
-      await fetch(`/api/databases/${database.id}/rows?rowId=${rowId}`, {
+      const res = await fetch(`/api/databases/${database.id}/rows?rowId=${rowId}`, {
         method: "DELETE",
       });
+      if (!res.ok) throw new Error("Could not delete row");
     } catch (err) {
       console.error(err);
+      setDatabase((prev) => ({ ...prev, rows: snapshot }));
     }
   };
 
@@ -148,7 +151,9 @@ export function DatabaseContainer({ database: initialDb, onRefresh }: DatabaseCo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, type, config }),
       });
+      if (!res.ok) throw new Error("Could not add property");
       const newProp = await res.json();
+      if (!newProp?.id) throw new Error("Invalid property response");
       setDatabase((prev) => ({
         ...prev,
         properties: [...prev.properties, newProp],
@@ -160,17 +165,20 @@ export function DatabaseContainer({ database: initialDb, onRefresh }: DatabaseCo
 
   // Delete a property column
   const handleDeleteProperty = async (propertyId: string) => {
+    const snapshot = database.properties;
     setDatabase((prev) => ({
       ...prev,
       properties: prev.properties.filter((p) => p.id !== propertyId),
     }));
 
     try {
-      await fetch(`/api/databases/${database.id}/properties?propertyId=${propertyId}`, {
+      const res = await fetch(`/api/databases/${database.id}/properties?propertyId=${propertyId}`, {
         method: "DELETE",
       });
+      if (!res.ok) throw new Error("Could not delete property");
     } catch (err) {
       console.error(err);
+      setDatabase((prev) => ({ ...prev, properties: snapshot }));
     }
   };
 
@@ -185,7 +193,9 @@ export function DatabaseContainer({ database: initialDb, onRefresh }: DatabaseCo
           type: newViewType,
         }),
       });
+      if (!res.ok) throw new Error("Could not create view");
       const newView = await res.json();
+      if (!newView?.id) throw new Error("Invalid view response");
       setDatabase((prev) => ({
         ...prev,
         views: [...prev.views, newView],

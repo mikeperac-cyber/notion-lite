@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const query = new URL(request.url).searchParams.get("q")?.trim() || "";
+    const query = (new URL(request.url).searchParams.get("q") || "").trim().slice(0, 200);
     if (!query) return NextResponse.json({ results: [] });
     await ensureSearch();
     const count = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>("SELECT count(*) AS count FROM page_search");

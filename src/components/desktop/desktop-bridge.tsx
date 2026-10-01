@@ -93,7 +93,9 @@ export function DesktopBridge() {
       const create = await fetch("/api/pages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceId: currentWorkspace?.id, title }) });
       if (!create.ok) throw new Error(`Could not import ${file.name}`);
       const page = await create.json();
-      const existing = await (await fetch(`/api/pages/${page.id}`)).json();
+      const existingRes = await fetch(`/api/pages/${page.id}`);
+      if (!existingRes.ok) throw new Error(`Could not load ${file.name}`);
+      const existing = await existingRes.json();
       const save = await fetch("/api/blocks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pageId: page.id, deletedBlockIds: existing.blocks.map((block: any) => block.id), changedBlocks: markdownBlocks(file.content) }) });
       if (!save.ok) throw new Error(`Could not save ${file.name}`);
       router.push(`/editor/${page.id}`);

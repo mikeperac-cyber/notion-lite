@@ -44,14 +44,30 @@ export function PropertyCell({
   const [inputText, setInputText] = useState(value !== undefined && value !== null ? String(value) : "");
   const [relationRows, setRelationRows] = useState<Array<{ id: string; title: string }>>([]);
   const [rollupValue, setRollupValue] = useState<number | null>(null);
+  // Stable snapshot of just the relation value feeding this rollup — depending on
+  // the whole allRowProperties object refires the fetch on every parent render.
+  const rollupRelationId = property.config?.rollupRelationPropId;
+  const rollupInput = JSON.stringify(rollupRelationId ? allRowProperties[rollupRelationId] ?? null : null);
   useEffect(() => {
     if (property.type !== "relation" || !property.config.relationDatabaseId) return;
-    fetch(`/api/databases/${property.config.relationDatabaseId}/rows`).then(response => response.json()).then(data => setRelationRows(data.rows || [])).catch(() => setRelationRows([]));
-  }, [property.type, property.config.relationDatabaseId, isOpen]);
+    if (!isOpen && relationRows.length > 0) return;
+    let alive = true;
+    fetch(`/api/databases/${property.config.relationDatabaseId}/rows`)
+      .then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+      .then(data => { if (alive) setRelationRows(data.rows || []); })
+      .catch(() => { if (alive) setRelationRows([]); });
+    return () => { alive = false; };
+  }, [property.type, property.config.relationDatabaseId, isOpen, relationRows.length]);
   useEffect(() => {
     if (property.type !== "rollup" || !rowId) return;
-    fetch(`/api/databases/${property.databaseId}/rollup?rowId=${encodeURIComponent(rowId)}&propertyId=${encodeURIComponent(property.id)}`).then(response => response.json()).then(data => setRollupValue(data.value ?? null)).catch(() => setRollupValue(null));
-  }, [property.type, property.databaseId, property.id, rowId, allRowProperties]);
+    let alive = true;
+    fetch(`/api/databases/${property.databaseId}/rollup?rowId=${encodeURIComponent(rowId)}&propertyId=${encodeURIComponent(property.id)}`)
+      .then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+      .then(data => { if (alive) setRollupValue(data.value ?? null); })
+      .catch(() => { if (alive) setRollupValue(null); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [property.type, property.databaseId, property.id, rowId, rollupInput]);
 
   if (property.type === "relation") {
     const ids: string[] = Array.isArray(value) ? value : [];

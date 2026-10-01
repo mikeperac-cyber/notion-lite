@@ -23,6 +23,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { PageSchema } from "@/types";
+import { parseJsonObject } from "@/lib/safe-json";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -119,40 +120,37 @@ export function PageHeader({ page, onUpdate }: PageHeaderProps) {
     updatePageInTree(page.id, { fullWidth: nextState });
   };
 
-  // Compute live task progress
-  const computeTaskProgress = () => {
+  // Compute live task progress (memoized: scans blocks only when they change;
+  // safe-parse guards a corrupt block from crashing the whole header)
+  const taskProgress = React.useMemo(() => {
     if (!page.blocks || page.blocks.length === 0) return null;
     let total = 0;
     let completed = 0;
     page.blocks.forEach((b) => {
       if (b.type === "todo") {
         total++;
-        const c = typeof b.content === "string" ? JSON.parse(b.content || "{}") : b.content;
+        const c = typeof b.content === "string" ? parseJsonObject(b.content) : b.content;
         if (c.checked) completed++;
       }
     });
     if (total === 0) return null;
     const percent = Math.round((completed / total) * 100);
     return { total, completed, percent };
-  };
+  }, [page.blocks]);
 
-  const taskProgress = computeTaskProgress();
-
-  // Compute live word count & reading time
-  const computeWordCount = () => {
+  // Compute live word count & reading time (memoized)
+  const wordCount = React.useMemo(() => {
     if (!page.blocks || page.blocks.length === 0) return 0;
     let words = 0;
     page.blocks.forEach((b) => {
-      const c = typeof b.content === "string" ? JSON.parse(b.content || "{}") : b.content;
+      const c = typeof b.content === "string" ? parseJsonObject(b.content) : b.content;
       const text = c.text || c.code || "";
       if (text) {
         words += text.trim().split(/\s+/).filter(Boolean).length;
       }
     });
     return words;
-  };
-
-  const wordCount = computeWordCount();
+  }, [page.blocks]);
   const readingTimeMinutes = Math.max(1, Math.ceil(wordCount / 200));
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,11 +189,14 @@ export function PageHeader({ page, onUpdate }: PageHeaderProps) {
       const res = await fetch(`/api/pages/${page.id}/duplicate`, {
         method: "POST",
       });
+      if (!res.ok) throw new Error("Could not duplicate page");
       const duplicated = await res.json();
+      if (!duplicated?.id) throw new Error("Could not duplicate page");
       addPageToTree(duplicated);
       router.push(`/editor/${duplicated.id}`);
     } catch (err) {
       console.error(err);
+      window.alert("Could not duplicate this page. Try again.");
     } finally {
       setDuplicating(false);
     }

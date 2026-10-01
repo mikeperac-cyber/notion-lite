@@ -334,6 +334,10 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
   });
 
   useEffect(() => {
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
+  }, []);
+
+  useEffect(() => {
     if (!editor) return;
     const insertAi = (event: Event) => {
       const value = (event as CustomEvent<string>).detail;
@@ -345,12 +349,16 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
 
   useEffect(() => {
     const openPicker = async () => {
-      const response = await fetch("/api/pages/choices");
-      if (!response.ok) { window.alert("Could not load pages"); return; }
-      const data = await response.json();
-      setLinkChoices((data.pages || []).filter((choice: { id: string }) => choice.id !== pageId));
-      setLinkQuery("");
-      setLinkPickerOpen(true);
+      try {
+        const response = await fetch("/api/pages/choices");
+        if (!response.ok) { window.alert("Could not load pages"); return; }
+        const data = await response.json();
+        setLinkChoices((data.pages || []).filter((choice: { id: string }) => choice.id !== pageId));
+        setLinkQuery("");
+        setLinkPickerOpen(true);
+      } catch {
+        window.alert("Could not load pages");
+      }
     };
     window.addEventListener("open-page-link-picker", openPicker);
     return () => window.removeEventListener("open-page-link-picker", openPicker);

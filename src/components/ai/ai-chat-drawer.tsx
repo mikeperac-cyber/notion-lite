@@ -57,6 +57,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
       });
 
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `AI request failed (HTTP ${res.status})`);
       const assistantMsg: Message = {
         role: "assistant",
         content: data.answer || data.result || "No response generated.",
@@ -67,7 +68,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
         ...prev,
         {
           role: "assistant",
-          content: "Sorry, I encountered an error answering your request.",
+          content: err?.message || "Sorry, I encountered an error answering your request.",
         },
       ]);
     } finally {

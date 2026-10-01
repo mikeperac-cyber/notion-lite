@@ -55,16 +55,19 @@ export default function EditorPage() {
 
   const handleUpdatePage = async (updates: Partial<PageSchema>) => {
     if (!page) return;
+    const previous = page;
     setPage((prev) => (prev ? { ...prev, ...updates } : null));
 
     try {
-      await fetch(`/api/pages/${page.id}`, {
+      const response = await fetch(`/api/pages/${page.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
+      if (!response.ok) throw new Error("Could not save page changes");
     } catch (err) {
       console.error("Update page failed", err);
+      setPage(previous);
     }
   };
 

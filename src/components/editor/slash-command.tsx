@@ -14,8 +14,20 @@ async function aiAction(editor: Editor, mode: string) {
   const contextText = selected || editor.getText();
   const prompt = mode === "prompt" ? window.prompt("What should AI write?") : undefined;
   if (mode === "prompt" && !prompt) return;
-  const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, prompt, contextText: mode === "prompt" ? prompt : contextText }) });
-  const data = await response.json();
+  let response: Response;
+  try {
+    response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, prompt, contextText: mode === "prompt" ? prompt : contextText }) });
+  } catch {
+    window.alert("AI request failed. Check your connection and try again.");
+    return;
+  }
+  let data: any = {};
+  try {
+    data = await response.json();
+  } catch {
+    window.alert("AI returned an unreadable response. Try again.");
+    return;
+  }
   if (!response.ok) { window.alert(data.error || "AI is unavailable. Configure a provider in Settings."); return; }
   if (mode === "extract_tasks") {
     const tasks: any[] = data.tasks || [];
@@ -50,7 +62,7 @@ export function getSuggestionItems(): CommandItem[] {
     item("Progress Tracker", "Editable goal meter", "Advanced & Media", BarChart2, editor => insert(editor, "progressBlock")),
     item("Video Embed", "YouTube or Vimeo video", "Advanced & Media", Video, editor => { const url = window.prompt("Video URL"); if (url) insert(editor, "videoEmbed", { url }); }),
     item("Web Bookmark", "Editable link card", "Advanced & Media", BookmarkIcon, editor => { const url = window.prompt("Bookmark URL"); if (url) insert(editor, "bookmark", { url, title: url }); }),
-    item("Synced Block", "Share a block across pages", "AI & Data", RefreshCw, editor => { const id = window.prompt("Existing sync ID (leave blank to create a new block)"); if (id === null) return; if (id.trim()) fetch(`/api/synced-blocks/${encodeURIComponent(id.trim())}`).then(response => response.json()).then(data => { if (data.node) editor.chain().focus().insertContent({ ...data.node, attrs: { ...(data.node.attrs || {}), syncId: id.trim(), id: null } }).run(); else window.alert("Sync ID not found"); }); else insert(editor, "syncedBlock", { syncId: crypto.randomUUID() }, [paragraph("Shared content")]); }),
+    item("Synced Block", "Share a block across pages", "AI & Data", RefreshCw, editor => { const id = window.prompt("Existing sync ID (leave blank to create a new block)"); if (id === null) return; if (id.trim()) fetch(`/api/synced-blocks/${encodeURIComponent(id.trim())}`).then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }).then(data => { if (data.node) editor.chain().focus().insertContent({ ...data.node, attrs: { ...(data.node.attrs || {}), syncId: id.trim(), id: null } }).run(); else window.alert("Sync ID not found"); }).catch(() => window.alert("Could not load synced block")); else insert(editor, "syncedBlock", { syncId: crypto.randomUUID() }, [paragraph("Shared content")]); }),
     item("AI Prompt", "Draft with your AI provider", "AI & Data", Sparkles, editor => { void aiAction(editor, "prompt"); }),
     item("AI Action Items", "Extract tasks from page", "AI & Data", ListChecks, editor => { void aiAction(editor, "extract_tasks"); }),
   ];

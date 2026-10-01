@@ -9,7 +9,13 @@ export function PageHistoryModal({ pageId, open, onOpenChange }: { pageId: strin
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [status, setStatus] = useState("");
   useEffect(() => {
-    if (open) fetch(`/api/pages/${pageId}/history`).then(response => response.json()).then(data => setSnapshots(data.snapshots || [])).catch(() => setStatus("Could not load page history."));
+    if (!open) { setSnapshots([]); setStatus(""); return; }
+    let alive = true;
+    fetch(`/api/pages/${pageId}/history`)
+      .then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+      .then(data => { if (alive) setSnapshots(data.snapshots || []); })
+      .catch(() => { if (alive) setStatus("Could not load page history."); });
+    return () => { alive = false; };
   }, [pageId, open]);
   const restore = async (snapshot: Snapshot) => {
     if (!window.confirm(`Restore “${snapshot.title}” from ${new Date(snapshot.createdAt).toLocaleString()}? Current content will be saved as an undo snapshot.`)) return;

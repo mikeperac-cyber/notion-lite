@@ -43,16 +43,16 @@ export function RowModal({
   const pageId = row?.pageId;
 
   useEffect(() => {
-    if (pageId && open) {
-      setLoadingPage(true);
-      fetch(`/api/pages/${pageId}`)
-        .then((res) => res.json())
-        .then((data) => {
-          setRowPage(data);
-        })
-        .catch(console.error)
-        .finally(() => setLoadingPage(false));
-    }
+    if (!open) { setRowPage(null); return; }
+    if (!pageId) return;
+    let alive = true;
+    setLoadingPage(true);
+    fetch(`/api/pages/${pageId}`)
+      .then((res) => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+      .then((data) => { if (alive) setRowPage(data); })
+      .catch((error) => { if (alive) console.error(error); })
+      .finally(() => { if (alive) setLoadingPage(false); });
+    return () => { alive = false; };
   }, [pageId, open]);
 
   if (!row) return null;

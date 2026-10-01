@@ -53,6 +53,9 @@ export async function PATCH(
   try {
     const body = await req.json();
     const { propertyId, name, type, config, order } = body;
+    if (typeof propertyId !== "string") return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
+    const existing = await prisma.property.findFirst({ where: { id: propertyId, databaseId: params.databaseId }, select: { id: true } });
+    if (!existing) return NextResponse.json({ error: "Property not found" }, { status: 404 });
 
     const updated = await prisma.property.update({
       where: { id: propertyId },
@@ -87,6 +90,8 @@ export async function DELETE(
     if (!propertyId) {
       return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
     }
+    const existing = await prisma.property.findFirst({ where: { id: propertyId, databaseId: params.databaseId }, select: { id: true } });
+    if (!existing) return NextResponse.json({ error: "Property not found" }, { status: 404 });
 
     await prisma.property.delete({
       where: { id: propertyId },
