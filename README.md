@@ -21,7 +21,7 @@ Set `DATABASE_URL=file:./dev.db` in a local `.env` file for development. `.env` 
 npm run electron:build:prod
 ```
 
-Install `dist-electron/Notion Lite Setup 0.1.0.exe`. The installer adds Desktop and Start Menu shortcuts. The app also refreshes `Notion Lite.lnk` in the Windows Desktop and OneDrive Desktop folders on launch, using the running executable's actual location. The unpacked and portable executables are for testing; use the installer for normal use.
+Install the versioned `dist-electron/Notion Lite Setup *.exe`. The installer adds Desktop and Start Menu shortcuts. The app also refreshes `Notion Lite.lnk` in the Windows Desktop and OneDrive Desktop folders on launch, using the running executable's actual location. The unpacked and portable executables are for testing; use the installer for normal use.
 
 Workspace data is stored in the Windows user data folder for Notion Lite. Open **Settings** to see the exact folder, choose the theme and close behavior, import Markdown, and create or restore a backup. Closing the window hides it in the tray by default; choose **Quit** from the tray or **Exit Notion Lite** from the File menu to stop it. `Ctrl+Alt+Space` reveals Search while the window is hidden.
 
