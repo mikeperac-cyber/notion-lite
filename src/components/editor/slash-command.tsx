@@ -2,40 +2,14 @@
 
 import React from "react";
 import { Editor } from "@tiptap/react";
-import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Code2, Quote, Minus, Keyboard, Lightbulb, ChevronRight, Columns, Table2, GitFork, Calculator, BarChart2, Video, Image as ImageIcon, Bookmark as BookmarkIcon, RefreshCw, Sparkles, ListChecks, Link2 } from "lucide-react";
+import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Code2, Quote, Minus, Keyboard, Lightbulb, ChevronRight, Columns, Table2, GitFork, Calculator, BarChart2, Video, Image as ImageIcon, Bookmark as BookmarkIcon, RefreshCw, Sparkles, ListChecks, Link2, PenLine, FileText } from "lucide-react";
 
 export interface CommandItem { title: string; description: string; category: "Basic" | "Callouts & Toggles" | "Advanced & Media" | "AI & Data"; icon: any; command: (editor: Editor) => void }
 const paragraph = (text = "") => ({ type: "paragraph", content: text ? [{ type: "text", text }] : [] });
 const insert = (editor: Editor, type: string, attrs: Record<string, any> = {}, content?: any[]) => editor.chain().focus().insertContent({ type, attrs, ...(content ? { content } : {}) }).run();
 const item = (title: string, description: string, category: CommandItem["category"], icon: any, command: (editor: Editor) => void): CommandItem => ({ title, description, category, icon, command });
 
-async function aiAction(editor: Editor, mode: string) {
-  const selected = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, " ");
-  const contextText = selected || editor.getText();
-  const prompt = mode === "prompt" ? window.prompt("What should AI write?") : undefined;
-  if (mode === "prompt" && !prompt) return;
-  let response: Response;
-  try {
-    response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, prompt, contextText: mode === "prompt" ? prompt : contextText }) });
-  } catch {
-    window.alert("AI request failed. Check your connection and try again.");
-    return;
-  }
-  let data: any = {};
-  try {
-    data = await response.json();
-  } catch {
-    window.alert("AI returned an unreadable response. Try again.");
-    return;
-  }
-  if (!response.ok) { window.alert(data.error || "AI is unavailable. Configure a provider in Settings."); return; }
-  if (mode === "extract_tasks") {
-    const tasks: any[] = data.tasks || [];
-    if (!tasks.length) return;
-    if (!window.confirm(`Insert these tasks?\n\n${tasks.map(task => `• ${task.title}`).join("\n")}`)) return;
-    insert(editor, "taskList", {}, tasks.map(task => ({ type: "taskItem", attrs: { checked: false }, content: [paragraph(task.title)] })));
-  } else if (data.result && window.confirm(`Insert this AI result?\n\n${data.result}`)) editor.chain().focus().insertContent(data.result).run();
-}
+const askAi = (detail: { mode: string; scope?: string }) => window.dispatchEvent(new CustomEvent("ai-request", { detail }));
 
 export function getSuggestionItems(): CommandItem[] {
   return [
@@ -63,8 +37,10 @@ export function getSuggestionItems(): CommandItem[] {
     item("Video Embed", "YouTube or Vimeo video", "Advanced & Media", Video, editor => { const url = window.prompt("Video URL"); if (url) insert(editor, "videoEmbed", { url }); }),
     item("Web Bookmark", "Editable link card", "Advanced & Media", BookmarkIcon, editor => { const url = window.prompt("Bookmark URL"); if (url) insert(editor, "bookmark", { url, title: url }); }),
     item("Synced Block", "Share a block across pages", "AI & Data", RefreshCw, editor => { const id = window.prompt("Existing sync ID (leave blank to create a new block)"); if (id === null) return; if (id.trim()) fetch(`/api/synced-blocks/${encodeURIComponent(id.trim())}`).then(response => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }).then(data => { if (data.node) editor.chain().focus().insertContent({ ...data.node, attrs: { ...(data.node.attrs || {}), syncId: id.trim(), id: null } }).run(); else window.alert("Sync ID not found"); }).catch(() => window.alert("Could not load synced block")); else insert(editor, "syncedBlock", { syncId: crypto.randomUUID() }, [paragraph("Shared content")]); }),
-    item("AI Prompt", "Draft with your AI provider", "AI & Data", Sparkles, editor => { void aiAction(editor, "prompt"); }),
-    item("AI Action Items", "Extract tasks from page", "AI & Data", ListChecks, editor => { void aiAction(editor, "extract_tasks"); }),
+    item("AI Write", "Ask AI to draft text", "AI & Data", Sparkles, () => askAi({ mode: "write" })),
+    item("AI Continue Writing", "Continue from the text before the cursor", "AI & Data", PenLine, () => askAi({ mode: "continue" })),
+    item("AI Summarize Page", "Summarize this page in bullets", "AI & Data", FileText, () => askAi({ mode: "summarize", scope: "page" })),
+    item("AI Action Items", "Extract tasks from this page", "AI & Data", ListChecks, () => askAi({ mode: "extract_tasks", scope: "page" })),
   ];
 }
 

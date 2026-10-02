@@ -77,21 +77,28 @@ const textNodes = (inline: Inline[]) =>
 
 const paragraphNode = (inline: Inline[]) => ({ type: "paragraph", content: textNodes(inline) });
 
+function blockNode(block: Block): any {
+  switch (block.type) {
+    case "paragraph": return paragraphNode(block.inline);
+    case "heading": return { type: "heading", attrs: { level: block.level }, content: textNodes(block.inline) };
+    case "code": return { type: "codeBlock", ...(block.text ? { content: [{ type: "text", text: block.text }] } : {}) };
+    case "bullet":
+    case "ordered":
+      return {
+        type: block.type === "bullet" ? "bulletList" : "orderedList",
+        content: block.items.map(item => ({ type: "listItem", content: [paragraphNode(item)] })),
+      };
+  }
+}
+
+/** Always block-level nodes, for inserting between existing blocks. */
+export function toTiptapBlocks(source: string): any[] {
+  return parseMarkdown(source).map(blockNode);
+}
+
 /** Inline text nodes for a single-paragraph result, so it can replace a selection in place. */
 export function toTiptapContent(source: string): any[] {
   const blocks = parseMarkdown(source);
   if (blocks.length === 1 && blocks[0].type === "paragraph") return textNodes(blocks[0].inline);
-  return blocks.map(block => {
-    switch (block.type) {
-      case "paragraph": return paragraphNode(block.inline);
-      case "heading": return { type: "heading", attrs: { level: block.level }, content: textNodes(block.inline) };
-      case "code": return { type: "codeBlock", ...(block.text ? { content: [{ type: "text", text: block.text }] } : {}) };
-      case "bullet":
-      case "ordered":
-        return {
-          type: block.type === "bullet" ? "bulletList" : "orderedList",
-          content: block.items.map(item => ({ type: "listItem", content: [paragraphNode(item)] })),
-        };
-    }
-  });
+  return blocks.map(blockNode);
 }

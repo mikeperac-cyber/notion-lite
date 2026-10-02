@@ -171,11 +171,28 @@ describe("/api/ai provider errors", () => {
     expect(error).toMatch(/^AI provider returned 404\./);
   });
 
-  it("fails clearly when the provider returns nothing", async () => {
+  it("fails clearly when the provider keeps returning nothing", async () => {
+    reply(chatReply(""));
     reply(chatReply(""));
     const res = await call({ mode: "summarize", contextText: "t" });
     expect(res.status).toBe(502);
     expect((await res.json()).error).toBe("AI provider returned an empty response");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries once when the provider returns an empty answer", async () => {
+    reply(chatReply("   "));
+    reply(chatReply("Second time lucky"));
+    const res = await call({ mode: "summarize", contextText: "t" });
+    expect(res.status).toBe(200);
+    expect((await res.json()).result).toBe("Second time lucky");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry when the first answer is fine", async () => {
+    reply(chatReply("Good"));
+    await call({ mode: "summarize", contextText: "t" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("never leaks the API key in an error", async () => {
@@ -211,6 +228,42 @@ describe("/api/ai modes", () => {
     await call({ mode, contextText: "source text" });
     expect(prompt()).toContain(expected);
     expect(prompt()).toContain("source text");
+  });
+
+  it("builds a continue prompt from the text before the cursor", async () => {
+    reply(chatReply("and then it rained."));
+    const res = await call({ mode: "continue", contextText: "It was a sunny day" });
+    expect((await res.json()).result).toBe("and then it rained.");
+    expect(prompt()).toContain("Continue writing");
+    expect(prompt()).toContain("It was a sunny day");
+  });
+
+  it("builds a write prompt from the request and keeps page text as context only", async () => {
+    reply(chatReply("Dear team,"));
+    await call({ mode: "write", prompt: "a short welcome email", contextText: "Project Atlas kickoff notes" });
+    expect(prompt()).toContain("Request: a short welcome email");
+    expect(prompt()).toContain("Project Atlas kickoff notes");
+    expect(prompt()).toContain("context and style only");
+  });
+
+  it("writes from the request alone when there is no page context", async () => {
+    reply(chatReply("ok"));
+    await call({ mode: "write", prompt: "a haiku about tests" });
+    expect(prompt()).toContain("Request: a haiku about tests");
+    expect(prompt()).not.toContain("Surrounding page content");
+  });
+
+  it("rejects a write request with no prompt even if page text is sent", async () => {
+    const res = await call({ mode: "write", prompt: "  ", contextText: "some page text" });
+    expect(res.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("only sends the last part of a long page as write context", async () => {
+    reply(chatReply("ok"));
+    await call({ mode: "write", prompt: "intro", contextText: `START${"x".repeat(9000)}END` });
+    expect(prompt()).toContain("END");
+    expect(prompt()).not.toContain("START");
   });
 
   it("includes earlier turns so follow-up questions work", async () => {

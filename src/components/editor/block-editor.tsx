@@ -27,16 +27,12 @@ import {
   Sparkles,
   Check,
   Highlighter,
-  Loader2,
   Languages,
   ListChecks,
-  X,
-  RotateCcw,
-  Settings as SettingsIcon,
 } from "lucide-react";
-import { useAppStore } from "@/lib/store";
 import { toTiptapContent } from "@/lib/ai-markdown";
-import { MarkdownText } from "@/components/ai/markdown-text";
+import { AiPanel } from "@/components/ai/ai-panel";
+import { AiMode, useAiAssistant } from "./use-ai-assistant";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SlashCommandList, getSuggestionItems, CommandItem } from "./slash-command";
@@ -117,21 +113,8 @@ const GlobalId = Extension.create({
 export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEditorProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
-  const { setSettingsOpen } = useAppStore();
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [translateMenuOpen, setTranslateMenuOpen] = useState(false);
-  type AiPreviewState = {
-    action: string;
-    hasSelection: boolean;
-    selectionFrom: number;
-    selectionTo: number;
-    loading: boolean;
-    error: string | null;
-    notConfigured: boolean;
-    result: string | null;
-    tasks: Array<{ title: string; priority?: string; estimate?: number | null }> | null;
-  };
-  const [aiPreview, setAiPreview] = useState<AiPreviewState | null>(null);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
   const [linkChoices, setLinkChoices] = useState<Array<{ id: string; title: string; icon: string | null }>>([]);
   const [linkQuery, setLinkQuery] = useState("");
@@ -360,7 +343,7 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
     const insertAi = (event: Event) => {
       const value = (event as CustomEvent<string>).detail;
       const content = value ? toTiptapContent(value) : [];
-      if (content.length && window.confirm(`Insert this AI response into the page?\n\n${value}`)) editor.chain().focus().insertContent(content).run();
+      if (content.length) editor.chain().focus().insertContent(content).run();
     };
     window.addEventListener("ai-insert", insertAi);
     return () => window.removeEventListener("ai-insert", insertAi);
@@ -388,84 +371,11 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
     setLinkPickerOpen(false);
   };
 
-  const runAiAction = async (action: string, extra?: { targetLanguage?: string }) => {
-    if (!editor) return;
-    const { from, to } = editor.state.selection;
-    const selectedText = editor.state.doc.textBetween(from, to, " ");
-    const context = selectedText || editor.getText();
-
+  const ai = useAiAssistant(editor);
+  const runToolbarAction = (mode: AiMode, targetLanguage?: string) => {
     setAiMenuOpen(false);
     setTranslateMenuOpen(false);
-    setAiPreview({
-      action,
-      hasSelection: !!selectedText,
-      selectionFrom: from,
-      selectionTo: to,
-      loading: true,
-      error: null,
-      notConfigured: false,
-      result: null,
-      tasks: null,
-    });
-
-    try {
-      const res = await fetch("/api/ai", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(typeof window !== "undefined" && (window as any).env?.internalSecret ? { "x-internal-secret": (window as any).env.internalSecret } : {}),
-        },
-        body: JSON.stringify({ mode: action, contextText: context, ...extra }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setAiPreview(prev => prev && {
-          ...prev,
-          loading: false,
-          notConfigured: data.code === "not_configured" || data.code === "model_required",
-          error: data.error || "AI request failed",
-        });
-        return;
-      }
-      if (action === "extract_tasks") {
-        setAiPreview(prev => prev && { ...prev, loading: false, tasks: data.tasks || [] });
-      } else {
-        setAiPreview(prev => prev && { ...prev, loading: false, result: data.result || data.answer || "" });
-      }
-    } catch (err) {
-      setAiPreview(prev => prev && {
-        ...prev,
-        loading: false,
-        error: err instanceof Error ? err.message : "AI request failed",
-      });
-    }
-  };
-
-  const handleAiAction = (action: string) => runAiAction(action);
-
-  const applyAiResult = (mode: "replace" | "insert") => {
-    if (!editor || !aiPreview?.result) return;
-    const content = toTiptapContent(aiPreview.result);
-    if (!content.length) return;
-    if (mode === "replace" && aiPreview.hasSelection) {
-      editor.commands.insertContentAt({ from: aiPreview.selectionFrom, to: aiPreview.selectionTo }, content);
-    } else {
-      editor.commands.insertContent(content);
-    }
-    setAiPreview(null);
-  };
-
-  const insertAiTasks = () => {
-    if (!editor || !aiPreview?.tasks?.length) return;
-    editor.commands.insertContent({
-      type: "taskList",
-      content: aiPreview.tasks.map(task => ({
-        type: "taskItem",
-        attrs: { checked: false },
-        content: [{ type: "paragraph", content: [{ type: "text", text: task.priority ? `${task.title} (${task.priority})` : task.title }] }],
-      })),
-    });
-    setAiPreview(null);
+    ai.start({ mode, scope: "selection", targetLanguage });
   };
 
   return (
@@ -539,7 +449,7 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
           <Button
             size="xs"
             variant="ghost"
-            onClick={() => { setAiPreview(null); setAiMenuOpen(!aiMenuOpen); }}
+            onClick={() => setAiMenuOpen(!aiMenuOpen)}
             className="h-7 px-2 text-xs gap-1 text-indigo-500 font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950"
           >
             <Sparkles className="h-3.5 w-3.5" />
@@ -549,25 +459,25 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
           {aiMenuOpen && (
             <div className="absolute top-9 left-0 z-50 w-56 rounded-lg border border-border bg-popover p-1 shadow-xl space-y-0.5 text-xs">
               <button
-                onClick={() => handleAiAction("summarize")}
+                onClick={() => runToolbarAction("summarize")}
                 className="w-full text-left px-2 py-1.5 rounded hover:bg-muted"
               >
                 📝 Summarize
               </button>
               <button
-                onClick={() => handleAiAction("fix_grammar")}
+                onClick={() => runToolbarAction("fix_grammar")}
                 className="w-full text-left px-2 py-1.5 rounded hover:bg-muted"
               >
                 ✨ Fix Spelling & Grammar
               </button>
               <button
-                onClick={() => handleAiAction("make_shorter")}
+                onClick={() => runToolbarAction("make_shorter")}
                 className="w-full text-left px-2 py-1.5 rounded hover:bg-muted"
               >
                 ✂️ Make Shorter
               </button>
               <button
-                onClick={() => handleAiAction("make_longer")}
+                onClick={() => runToolbarAction("make_longer")}
                 className="w-full text-left px-2 py-1.5 rounded hover:bg-muted"
               >
                 📖 Make Longer
@@ -584,7 +494,7 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
                   {["Spanish", "French", "German", "Japanese", "Portuguese"].map(lang => (
                     <button
                       key={lang}
-                      onClick={() => runAiAction("translate", { targetLanguage: lang })}
+                      onClick={() => runToolbarAction("translate", lang)}
                       className="px-1.5 py-0.5 rounded-full bg-muted hover:bg-accent border border-border text-[10px]"
                     >
                       {lang}
@@ -593,7 +503,7 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
                 </div>
               )}
               <button
-                onClick={() => handleAiAction("extract_tasks")}
+                onClick={() => runToolbarAction("extract_tasks")}
                 className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded hover:bg-muted"
               >
                 <ListChecks className="h-3 w-3" />
@@ -602,86 +512,10 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
             </div>
           )}
 
-          {aiPreview && (
-            <div className="absolute top-9 left-0 z-50 w-80 rounded-lg border border-border bg-popover p-3 shadow-xl text-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-indigo-500 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI {aiPreview.action.replace(/_/g, " ")}
-                </span>
-                <button onClick={() => setAiPreview(null)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              {aiPreview.loading && (
-                <div className="flex items-center gap-2 text-muted-foreground py-3 justify-center">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Thinking…
-                </div>
-              )}
-
-              {!aiPreview.loading && aiPreview.error && (
-                <div className="space-y-2">
-                  <p className="text-rose-500">{aiPreview.error}</p>
-                  <div className="flex justify-end gap-1.5">
-                    {aiPreview.notConfigured ? (
-                      <Button size="xs" className="h-6 px-2 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => { setAiPreview(null); setSettingsOpen(true); }}>
-                        <SettingsIcon className="h-3 w-3 mr-1" />
-                        Open Settings
-                      </Button>
-                    ) : (
-                      <Button size="xs" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => runAiAction(aiPreview.action)}>
-                        <RotateCcw className="h-3 w-3 mr-1" />
-                        Retry
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {!aiPreview.loading && !aiPreview.error && aiPreview.tasks && (
-                <div className="space-y-2">
-                  <div className="max-h-40 overflow-y-auto space-y-1 rounded border border-border/60 p-1.5">
-                    {aiPreview.tasks.length === 0 ? (
-                      <p className="text-muted-foreground italic">No actionable tasks found.</p>
-                    ) : aiPreview.tasks.map((task, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <span className="h-3 w-3 rounded border border-border shrink-0" />
-                        <span className="truncate">{task.title}</span>
-                        {task.priority && <span className="ml-auto text-[10px] text-muted-foreground shrink-0">{task.priority}</span>}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end gap-1.5">
-                    <Button size="xs" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => setAiPreview(null)}>Discard</Button>
-                    {aiPreview.tasks.length > 0 && (
-                      <Button size="xs" className="h-6 px-2 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white" onClick={insertAiTasks}>Insert as Tasks</Button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {!aiPreview.loading && !aiPreview.error && aiPreview.result !== null && (
-                <div className="space-y-2">
-                  <div className="max-h-40 overflow-y-auto rounded border border-border/60 p-1.5 bg-muted/40"><MarkdownText text={aiPreview.result} /></div>
-                  <div className="flex justify-end gap-1.5">
-                    <Button size="xs" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => setAiPreview(null)}>Discard</Button>
-                    <Button size="xs" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => runAiAction(aiPreview.action)}>
-                      <RotateCcw className="h-3 w-3 mr-1" />
-                      Retry
-                    </Button>
-                    {aiPreview.hasSelection && (
-                      <Button size="xs" className="h-6 px-2 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => applyAiResult("replace")}>Replace</Button>
-                    )}
-                    <Button size="xs" className="h-6 px-2 text-[11px] bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => applyAiResult("insert")}>Insert Below</Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </BubbleMenu>
       )}
+
+      <AiPanel state={ai.panel} onClose={ai.close} onApply={ai.apply} onRetry={ai.retry} onSubmitPrompt={ai.submitPrompt} />
 
       {/* Editor Main Canvas */}
       <div className="py-4" onClickCapture={event => {

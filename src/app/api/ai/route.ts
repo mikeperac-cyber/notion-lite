@@ -85,7 +85,7 @@ export async function POST(request: Request) {
     const { provider, model, key } = await configuration();
     if (!key) return NextResponse.json({ code: "not_configured", error: "Add an AI provider key in Settings." }, { status: 409 });
     if (!model) return NextResponse.json({ code: "model_required", error: "Choose an AI model in Settings." }, { status: 409 });
-    const text = String(contextText || prompt || "").slice(0, 40000);
+    const text = String((mode === "write" ? prompt : contextText || prompt) || "").slice(0, 40000);
     if (!text.trim()) return NextResponse.json({ error: "Text is required" }, { status: 400 });
     let instruction = text;
     if (mode === "chat") {
@@ -97,8 +97,15 @@ export async function POST(request: Request) {
     if (mode === "translate") instruction = `Translate to ${String(targetLanguage || "English").slice(0, 60)}. Return only the translation:\n\n${text}`;
     if (mode === "make_shorter") instruction = `Rewrite this more concisely. Return only the rewrite:\n\n${text}`;
     if (mode === "make_longer") instruction = `Expand this text. Return only the rewrite:\n\n${text}`;
+    if (mode === "continue") instruction = `Continue writing the text below naturally, in the same voice and format. Write one short paragraph (two to four sentences) unless the text clearly calls for more. Return only the continuation, without repeating the original text:\n\n${text}`;
+    if (mode === "write") {
+      const pageContext = String(contextText || "").slice(-4000);
+      instruction = `Write the text requested below for a document. Return only the text to insert; use Markdown lists or emphasis where helpful.\n\nRequest: ${text}${pageContext ? `\n\nSurrounding page content (for context and style only, do not repeat it):\n${pageContext}` : ""}`;
+    }
     if (mode === "extract_tasks") instruction = `Extract actionable tasks. Return ONLY a JSON array of objects with title, priority (High, Medium, Low), and estimate (hours or null). Do not invent tasks.\n\n${text}`;
-    const result = (await complete(provider, model, key, instruction)).trim();
+    let result = (await complete(provider, model, key, instruction)).trim();
+    // Reasoning models occasionally return an empty answer; one automatic retry hides that glitch.
+    if (!result) result = (await complete(provider, model, key, instruction)).trim();
     if (!result) throw new Error("AI provider returned an empty response");
     if (mode === "extract_tasks") {
       const tasks = JSON.parse(result.replace(/^```(?:json)?\s*|\s*```$/g, ""));

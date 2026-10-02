@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { getSchema } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Node as PMNode } from "@tiptap/pm/model";
-import { parseInline, parseMarkdown, toTiptapContent } from "./ai-markdown";
+import { parseInline, parseMarkdown, toTiptapBlocks, toTiptapContent } from "./ai-markdown";
 
 describe("parseInline", () => {
   it("handles bold, italic and code", () => {
@@ -96,6 +96,28 @@ describe("toTiptapContent", () => {
 
   it("returns an empty array for empty input", () => {
     expect(toTiptapContent("")).toEqual([]);
+  });
+});
+
+describe("toTiptapBlocks", () => {
+  it("wraps a single sentence in a paragraph instead of returning inline text", () => {
+    expect(toTiptapBlocks("Just a sentence.")).toEqual([{ type: "paragraph", content: [{ type: "text", text: "Just a sentence." }] }]);
+  });
+
+  it("matches toTiptapContent for multi-block results", () => {
+    const source = "# Title\n\n- a\n- b";
+    expect(toTiptapBlocks(source)).toEqual(toTiptapContent(source));
+  });
+
+  it("returns nothing for empty input", () => {
+    expect(toTiptapBlocks("")).toEqual([]);
+  });
+
+  it("always produces valid top-level blocks", () => {
+    const schema = getSchema([StarterKit]);
+    for (const source of ["One line.", "- x\n- y", "## H\n\ntext", "```\ncode\n```"]) {
+      expect(() => PMNode.fromJSON(schema, { type: "doc", content: toTiptapBlocks(source) }).check()).not.toThrow();
+    }
   });
 });
 
