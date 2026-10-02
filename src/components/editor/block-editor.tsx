@@ -219,13 +219,22 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
                   popup?.[0]?.hide();
                   return true;
                 }
-                if (props.event.key === "ArrowDown" && items.length) {
-                  selectedIndex = (selectedIndex + 1) % items.length;
-                  updateList();
-                  return true;
-                }
-                if (props.event.key === "ArrowUp" && items.length) {
-                  selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                if (items.length && ["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"].includes(props.event.key)) {
+                  if (props.event.key === "Home") {
+                    selectedIndex = 0;
+                  } else if (props.event.key === "End") {
+                    selectedIndex = items.length - 1;
+                  } else if (props.event.key === "PageDown" || props.event.key === "PageUp") {
+                    const list = popup?.[0]?.popper?.querySelector<HTMLElement>("[data-slash-command-list]");
+                    const option = list?.querySelector<HTMLElement>("[role=option]");
+                    const pageSize = list && option ? Math.max(1, Math.floor((list.clientHeight - 8) / option.getBoundingClientRect().height)) : 6;
+                    const direction = props.event.key === "PageDown" ? 1 : -1;
+                    selectedIndex = Math.max(0, Math.min(items.length - 1, selectedIndex + direction * pageSize));
+                  } else if (props.event.key === "ArrowDown") {
+                    selectedIndex = (selectedIndex + 1) % items.length;
+                  } else {
+                    selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                  }
                   updateList();
                   return true;
                 }

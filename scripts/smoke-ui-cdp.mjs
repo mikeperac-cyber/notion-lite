@@ -61,6 +61,11 @@ async function click(expression, label) {
   await call("Input.dispatchMouseEvent", { type: "mouseReleased", x: point.x, y: point.y, button: "left", clickCount: 1 });
 }
 
+async function pressKey(key, code, text = "") {
+  await call("Input.dispatchKeyEvent", { type: "keyDown", key, code, text });
+  await call("Input.dispatchKeyEvent", { type: "keyUp", key, code });
+}
+
 await call("Runtime.enable");
 await call("Log.enable");
 try {
@@ -116,6 +121,18 @@ try {
   }
   await waitFor("location.pathname.startsWith('/editor/') && Boolean(document.querySelector('.ProseMirror'))", "editor page");
   assert.match(await evaluate("document.querySelector('[role=\"status\"]')?.textContent || ''"), /Saved|Saving/);
+
+  await evaluate("document.querySelector('.ProseMirror')?.focus(); true");
+  await pressKey("/", "Slash", "/");
+  await waitFor("Boolean(document.querySelector('[data-slash-command-list]'))", "slash command list");
+  const paletteBefore = await evaluate("(() => { const list = document.querySelector('[data-slash-command-list]'); return { scrollTop: list.scrollTop, clientHeight: list.clientHeight, scrollHeight: list.scrollHeight }; })()");
+  assert(paletteBefore.scrollHeight > paletteBefore.clientHeight, "Slash command list is not scrollable");
+  for (let index = 0; index < 10; index++) await pressKey("ArrowDown", "ArrowDown");
+  const paletteAfter = await evaluate("(() => { const list = document.querySelector('[data-slash-command-list]'); return { scrollTop: list.scrollTop, selected: list.querySelector('[aria-selected=\"true\"]')?.textContent.trim() }; })()");
+  assert(paletteAfter.scrollTop > paletteBefore.scrollTop, `Arrow navigation did not scroll the slash command list: ${JSON.stringify({ paletteBefore, paletteAfter })}`);
+  await pressKey("PageDown", "PageDown");
+  assert(await evaluate("Boolean(document.querySelector('[data-slash-command-list] [aria-selected=\"true\"]'))"), "PageDown did not keep a command selected");
+  await pressKey("Escape", "Escape");
 
   await new Promise(resolve => setTimeout(resolve, 500));
   assert.deepEqual(runtimeErrors, [], `Renderer errors: ${runtimeErrors.join("; ")}`);

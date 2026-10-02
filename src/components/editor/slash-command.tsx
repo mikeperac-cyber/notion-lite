@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { Editor } from "@tiptap/react";
 import { Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Code2, Quote, Minus, Keyboard, Lightbulb, ChevronRight, Columns, Table2, GitFork, Calculator, BarChart2, Video, Image as ImageIcon, Bookmark as BookmarkIcon, RefreshCw, Sparkles, ListChecks, Link2, PenLine, FileText } from "lucide-react";
 
@@ -46,5 +46,11 @@ export function getSuggestionItems(): CommandItem[] {
 
 interface ListProps { items: CommandItem[]; command: (item: CommandItem) => void; selectedIndex: number; onHover: (index: number) => void }
 export function SlashCommandList({ items, command, selectedIndex, onHover }: ListProps) {
-  return <div role="listbox" aria-label="Slash commands" className="max-h-80 w-72 overflow-y-auto rounded-lg border bg-popover p-1 shadow-xl">{items.length ? items.map((entry, index) => <button role="option" aria-selected={selectedIndex === index} key={entry.title} onMouseMove={() => onHover(index)} onMouseDown={event => event.preventDefault()} onClick={() => command(entry)} className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${selectedIndex === index ? "bg-accent" : "hover:bg-accent"}`}><entry.icon className="h-4 w-4 shrink-0" /><span><strong className="block">{entry.title}</strong><small className="text-muted-foreground">{entry.description}</small></span></button>) : <p className="p-2 text-xs text-muted-foreground">No commands found.</p>}</div>;
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  useEffect(() => {
+    optionRefs.current[selectedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex, items.length]);
+
+  return <div role="listbox" aria-label="Slash commands" aria-activedescendant={items[selectedIndex] ? `slash-command-option-${selectedIndex}` : undefined} data-slash-command-list className="max-h-80 w-72 overflow-y-auto rounded-lg border bg-popover p-1 shadow-xl">{items.length ? items.map((entry, index) => <button ref={node => { optionRefs.current[index] = node; }} id={`slash-command-option-${index}`} role="option" aria-selected={selectedIndex === index} key={entry.title} onMouseMove={() => onHover(index)} onMouseDown={event => event.preventDefault()} onClick={() => command(entry)} className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${selectedIndex === index ? "bg-accent" : "hover:bg-accent"}`}><entry.icon className="h-4 w-4 shrink-0" /><span><strong className="block">{entry.title}</strong><small className="text-muted-foreground">{entry.description}</small></span></button>) : <p className="p-2 text-xs text-muted-foreground">No commands found.</p>}</div>;
 }
