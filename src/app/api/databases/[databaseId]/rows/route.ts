@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { refreshSearchPage } from "@/lib/search";
 import { parseJsonObject } from "@/lib/safe-json";
 
-export async function GET(_req: Request, { params }: { params: { databaseId: string } }) {
+export async function GET(_req: Request, { params }: { params: Promise<{ databaseId: string }> }) {
   try {
-    const rows = await prisma.row.findMany({ where: { databaseId: params.databaseId }, take: 500, orderBy: { order: "asc" }, include: { page: { select: { title: true } } } });
+    const rows = await prisma.row.findMany({ where: { databaseId: (await params).databaseId }, take: 500, orderBy: { order: "asc" }, include: { page: { select: { title: true } } } });
     return NextResponse.json({ rows: rows.map(row => ({ id: row.id, title: row.page?.title || "Untitled", properties: parseJsonObject(row.properties) })) });
   } catch (error: any) {
     console.error("List Rows Error:", error);
@@ -15,10 +15,10 @@ export async function GET(_req: Request, { params }: { params: { databaseId: str
 
 export async function POST(
   req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
-    const { databaseId } = params;
+    const { databaseId } = await params;
     const body = await req.json();
     const { properties } = body;
 
@@ -105,7 +105,7 @@ export async function POST(
 
 export async function PATCH(
   _req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
     const body = await _req.json();
@@ -187,7 +187,7 @@ export async function PATCH(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
     const { searchParams } = new URL(_req.url);

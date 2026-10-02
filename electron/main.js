@@ -21,7 +21,7 @@ let rendererReady = false;
 const pendingCommands = [];
 let PORT = 3000;
 let startUrl = `http://127.0.0.1:${PORT}`;
-const defaults = { closeToTray: true, globalShortcut: true, theme: "system" };
+const defaults = { closeToTray: true, globalShortcut: true, theme: "system", backupIntervalHours: 24, backupRetention: 14, backupDirectory: "" };
 let settings = { ...defaults };
 
 function settingsPath() { return path.join(app.getPath("userData"), "settings.json"); }
@@ -69,9 +69,25 @@ function loadSettings() {
   try { settings = { ...defaults, ...JSON.parse(fs.readFileSync(settingsPath(), "utf8")) }; }
   catch { settings = { ...defaults }; }
 }
+async function migrateLegacyAiKeys() {
+  const keys = settings.aiKeys;
+  if (!keys || typeof keys !== "object") return;
+  const keytar = require("keytar");
+  for (const provider of aiProviders) {
+    if (typeof keys[provider] === "string" && keys[provider] && !await keytar.getPassword("Notion Lite", provider)) {
+      await keytar.setPassword("Notion Lite", provider, keys[provider]);
+    }
+  }
+  delete settings.aiKeys;
+  persistSettings();
+}
 function persistSettings() {
   fs.mkdirSync(app.getPath("userData"), { recursive: true });
   fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
+}
+function publicSettings() {
+  const { aiKeys, ...visible } = settings;
+  return { ...visible, shortcutRegistered: settings.shortcutRegistered !== false };
 }
 function showWindow(command) {
   if (!mainWindow || mainWindow.isDestroyed()) { if (command) pendingCommands.push(command); return; }
@@ -107,7 +123,7 @@ function trusted(event) {
 }
 ipcMain.handle("desktop:get-settings", (event) => {
   trusted(event);
-  return { ...settings, shortcutRegistered: settings.shortcutRegistered !== false };
+  return publicSettings();
 });
 ipcMain.handle("desktop:set-settings", (event, changes) => {
   trusted(event);
@@ -116,12 +132,22 @@ ipcMain.handle("desktop:set-settings", (event, changes) => {
     if (typeof changes[key] === "boolean") settings[key] = changes[key];
   }
   if (["light", "dark", "system"].includes(changes.theme)) settings.theme = changes.theme;
+  if ([0, 24, 168].includes(changes.backupIntervalHours)) settings.backupIntervalHours = changes.backupIntervalHours;
+  if ([7, 14, 30].includes(changes.backupRetention)) settings.backupRetention = changes.backupRetention;
   persistSettings(); setShortcut(); createAppMenu();
-  return { ...settings, shortcutRegistered: settings.shortcutRegistered !== false };
+  return publicSettings();
 });
 ipcMain.handle("desktop:get-app-info", (event) => {
   trusted(event);
   return { version: app.getVersion(), dataPath: app.getPath("userData"), packaged: app.isPackaged };
+});
+ipcMain.handle("desktop:choose-backup-directory", async event => {
+  trusted(event);
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ["openDirectory", "createDirectory"] });
+  if (result.canceled || !result.filePaths[0]) return publicSettings();
+  settings.backupDirectory = result.filePaths[0];
+  persistSettings();
+  return publicSettings();
 });
 ipcMain.handle("desktop:save-file", async (event, request) => {
   trusted(event);
@@ -234,21 +260,40 @@ async function checkDueReminders() {
   } catch (error) { logError("reminders", error); }
   finally { checkingReminders = false; }
 }
-ipcMain.handle("desktop:create-backup", async (event) => {
-  trusted(event);
-  const result = await dialog.showSaveDialog(mainWindow, { defaultPath: `Notion-Lite-${new Date().toISOString().slice(0, 10)}.zip`, filters: [{ name: "Notion Lite Backup", extensions: ["zip"] }] });
-  if (result.canceled || !result.filePath) return { canceled: true };
+async function createBackupArchive(filePath) {
   const zip = new AdmZip();
   const database = await fetchSnapshot();
   zip.addFile("workspace.db", database);
   const attachments = path.join(app.getPath("userData"), "attachments");
   if (fs.existsSync(attachments)) zip.addLocalFolder(attachments, "attachments");
   zip.addFile("manifest.json", Buffer.from(JSON.stringify({ format: "notionlite-backup", version: 1, createdAt: new Date().toISOString(), databaseSha256: crypto.createHash("sha256").update(database).digest("hex") })));
-  const temporary = `${result.filePath}.partial`;
+  const temporary = `${filePath}.partial`;
   zip.writeZip(temporary);
-  await fs.promises.rename(temporary, result.filePath);
-  return { canceled: false, path: result.filePath };
+  await fs.promises.rename(temporary, filePath);
+  return filePath;
+}
+ipcMain.handle("desktop:create-backup", async (event) => {
+  trusted(event);
+  const result = await dialog.showSaveDialog(mainWindow, { defaultPath: `Notion-Lite-${new Date().toISOString().slice(0, 10)}.zip`, filters: [{ name: "Notion Lite Backup", extensions: ["zip"] }] });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  return { canceled: false, path: await createBackupArchive(result.filePath) };
 });
+let automaticBackupRunning = false;
+async function checkAutomaticBackup() {
+  if (automaticBackupRunning || !settings.backupIntervalHours || !serverProcess) return;
+  automaticBackupRunning = true;
+  try {
+    const directory = settings.backupDirectory || path.join(app.getPath("userData"), "backups");
+    await fs.promises.mkdir(directory, { recursive: true });
+    const backups = (await fs.promises.readdir(directory)).filter(name => /^Notion-Lite-auto-\d{4}-\d{2}-\d{2}T\d{6}\.zip$/.test(name)).sort().reverse();
+    const last = backups[0] ? await fs.promises.stat(path.join(directory, backups[0])) : null;
+    if (last && Date.now() - last.mtimeMs < settings.backupIntervalHours * 3600000) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "").slice(0, 17);
+    await createBackupArchive(path.join(directory, `Notion-Lite-auto-${stamp}.zip`));
+    for (const name of backups.slice(settings.backupRetention - 1)) await fs.promises.unlink(path.join(directory, name));
+  } catch (error) { logError("automatic backup", error); }
+  finally { automaticBackupRunning = false; }
+}
 ipcMain.handle("desktop:restore-backup", async (event) => {
   trusted(event);
   const selected = await dialog.showOpenDialog(mainWindow, { properties: ["openFile"], filters: [{ name: "Notion Lite Backup", extensions: ["zip"] }] });
@@ -701,9 +746,10 @@ function createAppMenu() {
   Menu.setApplicationMenu(menu);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (process.platform === "win32") app.setAppUserModelId("com.notionlite.app");
   loadSettings();
+  try { await migrateLegacyAiKeys(); } catch (error) { logError("credential migration", error); }
   ensureDesktopShortcut();
   setShortcut();
   createTray();
@@ -711,6 +757,8 @@ app.whenReady().then(() => {
     createWindow();
     setTimeout(checkDueReminders, 5000);
     setInterval(checkDueReminders, 60 * 1000);
+    setTimeout(checkAutomaticBackup, 5000);
+    setInterval(checkAutomaticBackup, 60 * 60 * 1000);
     if (app.isPackaged) setTimeout(() => autoUpdater.checkForUpdates().catch(error => logError("update", error)), 10000);
   });
 

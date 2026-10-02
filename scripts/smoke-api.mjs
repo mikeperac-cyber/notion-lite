@@ -33,16 +33,22 @@ try {
     catch { if (server.exitCode !== null) throw new Error(`Server exited: ${errors}`); await new Promise(resolve => setTimeout(resolve, 200)); }
   }
   assert(ready, `Server did not start: ${errors}`);
+  const migrationBackups = await fs.readdir(path.join(temp, "pre-migration"));
+  assert.equal(migrationBackups.length, 1);
+  assert.equal((await fs.readFile(path.join(temp, "pre-migration", migrationBackups[0]))).subarray(0, 16).toString(), "SQLite format 3\0");
   const created = await (await request("/api/pages", "POST", { title: "Unique Search Fixture" })).json();
   assert(created.id);
   const page = await (await request(`/api/pages/${created.id}`)).json();
   const headingId = crypto.randomUUID();
-  const saved = await (await request("/api/blocks", "POST", { pageId: created.id, deletedBlockIds: page.blocks.map(block => block.id), changedBlocks: [{ id: headingId, type: "heading_1", order: 0, content: { text: "Asterism fixture", node: { type: "heading", attrs: { level: 1, id: headingId }, content: [{ type: "text", text: "Asterism fixture" }] } } }] })).json();
+  const saved = await (await request("/api/blocks", "POST", { pageId: created.id, deletedBlockIds: page.blocks.map(block => block.id), changedBlocks: [{ id: headingId, type: "heading_1", order: 0, content: { node: { type: "heading", attrs: { level: 1, id: headingId }, content: [{ type: "text", text: "Asterism fixture" }] } } }] })).json();
   assert(saved.success);
   const loaded = await (await request(`/api/pages/${created.id}`)).json();
   assert.equal(loaded.blocks[0].content.node.content[0].text, "Asterism fixture");
   const search = await (await request("/api/search?q=Asterism")).json();
   assert(search.results.some(result => result.pageId === created.id));
+  const aiContext = await (await request(`/api/ai?scope=current&pageId=${created.id}&q=Asterism`)).json();
+  assert(aiContext.sources.some(source => source.id === created.id));
+  assert.match(aiContext.preview, /Asterism fixture/);
   const history = await (await request(`/api/pages/${created.id}/history`)).json();
   assert(history.snapshots.length > 0);
   const restore = await (await request(`/api/pages/${created.id}/history`, "POST", { snapshotId: history.snapshots[0].id })).json();
@@ -54,6 +60,8 @@ try {
   assert(undoHistory.snapshots.length > history.snapshots.length);
   const noKey = await fetch(`${base}/api/ai`, { method: "POST", headers: { "x-internal-secret": secret, "Content-Type": "application/json" }, body: JSON.stringify({ mode: "summarize", contextText: "Test" }) });
   assert.equal(noKey.status, 409);
+  const noContext = await (await request("/api/ai?scope=none&q=test")).json();
+  assert.deepEqual(noContext.sources, []);
   const taskId = crypto.randomUUID();
   const dueAt = new Date(Date.now() - 60_000).toISOString();
   await request(`/api/pages/${created.id}/meta`, "PATCH", { tags: ["Reference", "Personal"], tasks: [{ id: taskId, title: "Review note", dueAt, completed: false, notified: false }] });
@@ -64,6 +72,18 @@ try {
   await request("/api/reminders/due", "POST", { pageId: created.id, taskId });
   const afterNotice = await (await request("/api/reminders/due")).json();
   assert(!afterNotice.due.some(task => task.taskId === taskId));
+  const taskInbox = await (await request("/api/tasks")).json();
+  assert(taskInbox.tasks.some(task => task.taskId === taskId && !task.completed));
+  const aiTasks = await (await request("/api/ai?scope=workspace&q=active%20tasks")).json();
+  assert.match(aiTasks.preview, /Review note/);
+  assert(aiTasks.sources.some(source => source.id === created.id));
+  await request("/api/tasks", "PATCH", { pageId: created.id, taskId, action: "snooze" });
+  const snoozed = await (await request(`/api/pages/${created.id}/meta`)).json();
+  assert(Date.parse(snoozed.tasks[0].dueAt) > Date.now());
+  assert.equal(snoozed.tasks[0].notified, false);
+  await request("/api/tasks", "PATCH", { pageId: created.id, taskId, action: "complete" });
+  const completed = await (await request("/api/tasks")).json();
+  assert(completed.tasks.some(task => task.taskId === taskId && task.completed));
 
   const linkingPage = await (await request("/api/pages", "POST", { title: "Link source" })).json();
   const linkBlockId = crypto.randomUUID();
@@ -102,7 +122,7 @@ try {
   const rollup = await (await request(`/api/databases/${source.database.id}/properties`, "POST", { name: "Count", type: "rollup", config: { rollupRelationPropId: relation.id, rollupTargetPropId: target.database.properties[0].id, rollupFunction: "count_all" } })).json();
   const value = await (await request(`/api/databases/${source.database.id}/rollup?rowId=${sourceRow.id}&propertyId=${rollup.id}`)).json();
   assert.equal(value.value, 1);
-  console.log("API smoke passed: rich save, FTS, history restore, backup and attachments, links, tags, reminders, notebook cycles, trash, relation, rollup, AI unconfigured state");
+  console.log("API smoke passed: rich save, FTS, history restore, backup and attachments, links, tags, tasks, reminders, notebook cycles, trash, relation, rollup, AI context preview and unconfigured state");
 } finally {
   server.kill();
   await new Promise(resolve => { if (server.exitCode !== null) resolve(); else { server.once("exit", resolve); setTimeout(resolve, 5000); } });

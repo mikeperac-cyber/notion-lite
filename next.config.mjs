@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
-  swcMinify: true,
+  outputFileTracingRoot: process.cwd(),
   compress: true,
   poweredByHeader: false,
   images: {

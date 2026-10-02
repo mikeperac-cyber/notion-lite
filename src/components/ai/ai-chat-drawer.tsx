@@ -23,6 +23,7 @@ interface Message {
   content: string;
   notConfigured?: boolean;
   error?: boolean;
+  sources?: Array<{ id: string; title: string }>;
 }
 
 const GREETING: Message = {
@@ -42,13 +43,15 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) => void }) {
   const insertText = onInsertText || ((text: string) => window.dispatchEvent(new CustomEvent("ai-insert", { detail: text })));
-  const { aiChatOpen, setAiChatOpen, setSettingsOpen } = useAppStore();
+  const { aiChatOpen, setAiChatOpen, setSettingsOpen, activePageId } = useAppStore();
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [providerLabel, setProviderLabel] = useState("AI Assistant");
   const [configured, setConfigured] = useState(true);
+  const [contextScope, setContextScope] = useState<"none" | "current" | "workspace">("none");
+  const [contextPreview, setContextPreview] = useState<{ sources: Array<{ id: string; title: string }>; preview: string }>({ sources: [], preview: "" });
 
   useEffect(() => {
     if (!aiChatOpen) return;
@@ -60,6 +63,16 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
       })
       .catch(() => {});
   }, [aiChatOpen]);
+
+  useEffect(() => {
+    if (!aiChatOpen || contextScope === "none" || (contextScope === "current" && !activePageId)) { setContextPreview({ sources: [], preview: "" }); return; }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ scope: contextScope, q: input, ...(activePageId ? { pageId: activePageId } : {}) });
+      fetch(`/api/ai?${params}`, { signal: controller.signal }).then(response => response.json()).then(data => { if (!controller.signal.aborted) setContextPreview({ sources: data.sources || [], preview: data.preview || "" }); }).catch(() => {});
+    }, 250);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [aiChatOpen, contextScope, activePageId, input]);
 
   if (!aiChatOpen) return null;
 
@@ -83,6 +96,8 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
           mode: "chat",
           prompt: textToSend,
           history,
+          contextScope,
+          pageId: contextScope === "current" ? activePageId : undefined,
         }),
       });
 
@@ -98,6 +113,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
       const assistantMsg: Message = {
         role: "assistant",
         content: data.answer || data.result || "No response generated.",
+        sources: data.sources || [],
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err: any) {
@@ -179,6 +195,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
                 }`}
               >
                 {msg.role === "assistant" ? <MarkdownText text={msg.content} /> : <p className="whitespace-pre-wrap">{msg.content}</p>}
+                {Boolean(msg.sources?.length) && <div className="mt-2 border-t border-border/40 pt-1 text-[10px]">Pages used: {msg.sources!.map(source => <a key={source.id} href={`/editor/${encodeURIComponent(source.id)}`} className="mr-2 text-indigo-500 underline">{source.title}</a>)}</div>}
 
                 {msg.notConfigured && (
                   <button
@@ -250,6 +267,16 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
       </div>
 
       {/* Input Form */}
+      <div className="space-y-1 border-t border-border px-3 py-2 text-[11px]">
+        <label className="flex items-center gap-2">Share with AI
+          <select aria-label="AI context scope" className="flex-1 rounded border border-border bg-background px-2 py-1" value={contextScope} onChange={event => setContextScope(event.target.value as typeof contextScope)}>
+            <option value="none">No workspace content</option>
+            {activePageId && <option value="current">Current page</option>}
+            <option value="workspace">Relevant workspace pages and rows</option>
+          </select>
+        </label>
+        {contextScope !== "none" && <details><summary className="cursor-pointer text-muted-foreground">Preview content sent · {contextPreview.sources.length} pages</summary><pre className="mt-1 max-h-28 overflow-auto whitespace-pre-wrap rounded bg-muted p-2">{contextPreview.preview || "No matching content found."}</pre></details>}
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();

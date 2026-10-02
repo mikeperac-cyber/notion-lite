@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ensureWorkspaceSchema } from "@/lib/schema-upgrade";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    await ensureWorkspaceSchema();
     let workspace = await prisma.workspace.findFirst({
       include: {
         pages: {

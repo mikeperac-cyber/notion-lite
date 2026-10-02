@@ -7,15 +7,15 @@ export const dynamic = "force-dynamic";
 export interface PageTask { id: string; title: string; dueAt: string | null; completed: boolean; notified: boolean }
 const parse = (value: string) => { try { return JSON.parse(value); } catch { return []; } };
 
-export async function GET(_request: Request, { params }: { params: { pageId: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ pageId: string }> }) {
   await ensurePageMetaTable();
-  const page = await prisma.page.findUnique({ where: { id: params.pageId }, select: { id: true } });
+  const page = await prisma.page.findUnique({ where: { id: (await params).pageId }, select: { id: true } });
   if (!page) return NextResponse.json({ error: "Page not found" }, { status: 404 });
-  const meta = await prisma.pageMeta.findUnique({ where: { pageId: params.pageId } });
+  const meta = await prisma.pageMeta.findUnique({ where: { pageId: (await params).pageId } });
   return NextResponse.json({ tags: parse(meta?.tags || "[]"), tasks: parse(meta?.tasks || "[]") });
 }
 
-export async function PATCH(request: Request, { params }: { params: { pageId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ pageId: string }> }) {
   try {
     await ensurePageMetaTable();
     const body = await request.json();
@@ -29,11 +29,11 @@ export async function PATCH(request: Request, { params }: { params: { pageId: st
     data.tasks = JSON.stringify(body.tasks.map((task: PageTask) => ({ id: task.id, title: task.title.trim(), dueAt: task.dueAt, completed: task.completed, notified: Boolean(task.notified) })));
   }
   if (!Object.keys(data).length) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
-  const page = await prisma.page.findUnique({ where: { id: params.pageId }, select: { id: true } });
+  const page = await prisma.page.findUnique({ where: { id: (await params).pageId }, select: { id: true } });
   if (!page) return NextResponse.json({ error: "Page not found" }, { status: 404 });
   const meta = await prisma.pageMeta.upsert({
-    where: { pageId: params.pageId },
-    create: { pageId: params.pageId, ...data },
+    where: { pageId: (await params).pageId },
+    create: { pageId: (await params).pageId, ...data },
     update: data,
   });
   return NextResponse.json({ tags: parse(meta.tags), tasks: parse(meta.tasks) });

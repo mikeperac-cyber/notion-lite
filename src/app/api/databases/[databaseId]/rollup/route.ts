@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseJsonObject } from "@/lib/safe-json";
 
-export async function GET(request: Request, { params }: { params: { databaseId: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ databaseId: string }> }) {
   try {
     const search = new URL(request.url).searchParams;
     const rowId = search.get("rowId") || "";
     const propertyId = search.get("propertyId") || "";
     if (!rowId || !propertyId) return NextResponse.json({ error: "Missing rowId or propertyId" }, { status: 400 });
-    const [row, property] = await Promise.all([prisma.row.findFirst({ where: { id: rowId, databaseId: params.databaseId } }), prisma.property.findFirst({ where: { id: propertyId, databaseId: params.databaseId, type: "rollup" } })]);
+    const [row, property] = await Promise.all([prisma.row.findFirst({ where: { id: rowId, databaseId: (await params).databaseId } }), prisma.property.findFirst({ where: { id: propertyId, databaseId: (await params).databaseId, type: "rollup" } })]);
     if (!row || !property) return NextResponse.json({ error: "Rollup not found" }, { status: 404 });
     const config = parseJsonObject(property.config);
-    const relation = await prisma.property.findFirst({ where: { id: config.rollupRelationPropId, databaseId: params.databaseId, type: "relation" } });
+    const relation = await prisma.property.findFirst({ where: { id: config.rollupRelationPropId, databaseId: (await params).databaseId, type: "relation" } });
     if (!relation) return NextResponse.json({ value: null });
     const targetDatabaseId = parseJsonObject(relation.config).relationDatabaseId;
     const IDs = parseJsonObject(row.properties)[relation.id];

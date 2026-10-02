@@ -130,6 +130,12 @@ export function DesktopBridge() {
         <label className="flex justify-between items-center">Close to tray <input type="checkbox" checked={settings.closeToTray ?? true} onChange={event => update({ closeToTray: event.target.checked })} /></label>
         <label className="flex justify-between items-center">Ctrl+Alt+Space opens Search <input type="checkbox" checked={settings.globalShortcut ?? true} onChange={event => update({ globalShortcut: event.target.checked })} /></label>
         {settings.globalShortcut && settings.shortcutRegistered === false && <p className="text-amber-600">Windows could not register this shortcut. Another app may be using it.</p>}
+        <div className="space-y-2 border-t pt-4">
+          <p className="font-medium">Automatic backups</p>
+          <label className="flex justify-between items-center">Schedule <select aria-label="Backup schedule" className="bg-background border rounded p-1" value={settings.backupIntervalHours ?? 24} onChange={event => update({ backupIntervalHours: Number(event.target.value) })}><option value={0}>Off</option><option value={24}>Daily</option><option value={168}>Weekly</option></select></label>
+          <label className="flex justify-between items-center">Keep <select aria-label="Backup retention" className="bg-background border rounded p-1" value={settings.backupRetention ?? 14} onChange={event => update({ backupRetention: Number(event.target.value) })}><option value={7}>7 backups</option><option value={14}>14 backups</option><option value={30}>30 backups</option></select></label>
+          <div className="flex items-center gap-2"><Button variant="outline" size="sm" onClick={async () => setSettings(await window.electronAPI!.chooseBackupDirectory())}>Choose folder</Button><span className="min-w-0 truncate text-xs text-muted-foreground" title={settings.backupDirectory || `${dataPath}\\backups`}>{settings.backupDirectory || "App data / backups"}</span></div>
+        </div>
         <div className="flex flex-wrap gap-2 border-t pt-4">
           <Button variant="outline" onClick={async () => { try { const result = await window.electronAPI!.createBackup(); if (!result.canceled) setStatus("Backup saved."); } catch (error: any) { setStatus(error.message); } }}>Create backup</Button>
           <Button variant="outline" onClick={async () => { try { await window.electronAPI!.restoreBackup(); } catch (error: any) { setStatus(error.message); } }}>Restore backup</Button>

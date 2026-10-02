@@ -19,6 +19,7 @@ import {
   Star,
   Trash2,
   Settings,
+  CalendarDays,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { PageItem } from "./page-item";
@@ -161,6 +162,10 @@ export function Sidebar() {
 
         {/* Quick Actions */}
         <div className="p-2 space-y-0.5">
+          <Link href="/today" className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 transition-colors">
+            <CalendarDays className="h-4 w-4 text-indigo-500" />
+            <span className="flex-1 text-left">Today</span>
+          </Link>
           <button
             onClick={() => setSearchModalOpen(true)}
             className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60 transition-colors"

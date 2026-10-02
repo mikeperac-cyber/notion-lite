@@ -4,10 +4,10 @@ import { refreshSearchPage } from "@/lib/search";
 
 export async function POST(
   _req: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
   try {
-    const { pageId } = params;
+    const { pageId } = await params;
 
     const sourcePage = await prisma.page.findUnique({
       where: { id: pageId },

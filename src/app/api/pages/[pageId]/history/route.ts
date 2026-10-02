@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { refreshSearchPage } from "@/lib/search";
 import { parseJsonArray } from "@/lib/safe-json";
 
-export async function GET(_request: Request, { params }: { params: { pageId: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ pageId: string }> }) {
   try {
-    const snapshots = await prisma.pageSnapshot.findMany({ where: { pageId: params.pageId }, orderBy: { createdAt: "desc" }, take: 100 });
+    const { pageId } = await params;
+    const snapshots = await prisma.pageSnapshot.findMany({ where: { pageId }, orderBy: { createdAt: "desc" }, take: 100 });
     return NextResponse.json({ snapshots: snapshots.map(snapshot => ({ id: snapshot.id, title: snapshot.title, createdAt: snapshot.createdAt, blocks: parseJsonArray(snapshot.content).length })) });
   } catch (error: any) {
     console.error("List History Error:", error);
@@ -13,26 +14,27 @@ export async function GET(_request: Request, { params }: { params: { pageId: str
   }
 }
 
-export async function POST(request: Request, { params }: { params: { pageId: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ pageId: string }> }) {
   try {
+    const { pageId } = await params;
     const { snapshotId } = await request.json();
     if (typeof snapshotId !== "string") return NextResponse.json({ error: "Missing snapshotId" }, { status: 400 });
-    const snapshot = await prisma.pageSnapshot.findFirst({ where: { id: snapshotId, pageId: params.pageId } });
+    const snapshot = await prisma.pageSnapshot.findFirst({ where: { id: snapshotId, pageId } });
     if (!snapshot) return NextResponse.json({ error: "Snapshot not found" }, { status: 404 });
     const blocks = parseJsonArray(snapshot.content);
     if (!blocks.length && snapshot.content !== "[]") return NextResponse.json({ error: "Snapshot is invalid" }, { status: 400 });
   await prisma.$transaction(async tx => {
-    const current = await tx.page.findUniqueOrThrow({ where: { id: params.pageId }, include: { blocks: true } });
-    await tx.pageSnapshot.create({ data: { pageId: params.pageId, title: current.title, content: JSON.stringify(current.blocks) } });
-    await tx.block.deleteMany({ where: { pageId: params.pageId } });
-    await tx.page.update({ where: { id: params.pageId }, data: { title: snapshot.title } });
+    const current = await tx.page.findUniqueOrThrow({ where: { id: pageId }, include: { blocks: true } });
+    await tx.pageSnapshot.create({ data: { pageId, title: current.title, content: JSON.stringify(current.blocks) } });
+    await tx.block.deleteMany({ where: { pageId } });
+    await tx.page.update({ where: { id: pageId }, data: { title: snapshot.title } });
     const valid = blocks.filter(block => block && typeof block.id === "string" && typeof block.type === "string");
     if (valid.length !== blocks.length) throw new Error("Snapshot is invalid");
     if (valid.length) {
       await tx.block.createMany({
         data: valid.map(block => ({
           id: block.id,
-          pageId: params.pageId,
+          pageId,
           type: block.type,
           content: typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? {}),
           order: typeof block.order === "number" ? block.order : 0,
@@ -41,7 +43,7 @@ export async function POST(request: Request, { params }: { params: { pageId: str
       });
     }
   });
-  await refreshSearchPage(params.pageId);
+  await refreshSearchPage(pageId);
   return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Restore History Error:", error);

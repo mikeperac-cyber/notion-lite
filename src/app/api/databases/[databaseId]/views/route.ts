@@ -5,10 +5,10 @@ const VIEW_TYPES = ["table", "board", "calendar", "gallery", "list", "timeline"]
 
 export async function POST(
   req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
-    const { databaseId } = params;
+    const { databaseId } = await params;
     const body = await req.json();
     const { name, type, filters, sorts, grouping, visibleProps } = body;
     const viewType = type || "table";
@@ -49,14 +49,14 @@ export async function POST(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
     const body = await req.json();
     const { viewId, name, type, filters, sorts, grouping, visibleProps, order } = body;
     if (typeof viewId !== "string") return NextResponse.json({ error: "Missing viewId" }, { status: 400 });
     if (type !== undefined && (typeof type !== "string" || !VIEW_TYPES.includes(type))) return NextResponse.json({ error: "Invalid view type" }, { status: 400 });
-    const existing = await prisma.databaseView.findFirst({ where: { id: viewId, databaseId: params.databaseId }, select: { id: true } });
+    const existing = await prisma.databaseView.findFirst({ where: { id: viewId, databaseId: (await params).databaseId }, select: { id: true } });
     if (!existing) return NextResponse.json({ error: "View not found" }, { status: 404 });
 
     const updated = await prisma.databaseView.update({
@@ -90,7 +90,7 @@ export async function PATCH(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
     const { searchParams } = new URL(req.url);
@@ -98,7 +98,7 @@ export async function DELETE(
     if (!viewId) {
       return NextResponse.json({ error: "Missing viewId" }, { status: 400 });
     }
-    const existing = await prisma.databaseView.findFirst({ where: { id: viewId, databaseId: params.databaseId }, select: { id: true } });
+    const existing = await prisma.databaseView.findFirst({ where: { id: viewId, databaseId: (await params).databaseId }, select: { id: true } });
     if (!existing) return NextResponse.json({ error: "View not found" }, { status: 404 });
 
     await prisma.databaseView.delete({

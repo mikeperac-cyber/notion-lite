@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
       - run: npm ci
       - run: npm run prisma:generate
@@ -28,7 +28,9 @@ jobs:
       - run: node scripts/prepare-standalone.js
       - name: Run smoke tests
         run: node scripts/smoke-api.mjs
-      - run: npm run electron:release
+      - run: npx electron-builder --win nsis --publish never
+      - run: node scripts/smoke-packaged.mjs
+      - run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ secrets.CSC_LINK }}

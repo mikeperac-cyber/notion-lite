@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ready: () => ipcRenderer.send("desktop:renderer-ready"),
   getSettings: () => ipcRenderer.invoke("desktop:get-settings"),
   setSettings: (changes) => ipcRenderer.invoke("desktop:set-settings", changes),
+  chooseBackupDirectory: () => ipcRenderer.invoke("desktop:choose-backup-directory"),
   saveFile: (request) => ipcRenderer.invoke("desktop:save-file", request),
   createBackup: () => ipcRenderer.invoke("desktop:create-backup"),
   restoreBackup: () => ipcRenderer.invoke("desktop:restore-backup"),

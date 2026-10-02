@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
+import { findRelevantPages, plainText } from "@/lib/search";
 
 export const runtime = "nodejs";
 type Provider = "gemini" | "openai" | "anthropic" | "openrouter" | "opencode" | "nvidia";
@@ -15,7 +16,7 @@ async function configuration(): Promise<{ provider: Provider; model: string; key
   } catch {}
   const provider: Provider = providers.includes(saved.aiProvider) ? saved.aiProvider : "gemini";
   const model = String(saved.aiModel || process.env.GEMINI_MODEL || "").trim();
-  const key = (saved.aiKeys && saved.aiKeys[provider]) || process.env[`NL_AI_KEY_${provider.toUpperCase()}`] || "";
+  const key = process.env[`NL_AI_KEY_${provider.toUpperCase()}`] || "";
   return { provider, model, key };
 }
 
@@ -60,14 +61,69 @@ async function complete(provider: Provider, model: string, key: string, prompt: 
   return data.choices?.[0]?.message?.content || "";
 }
 
-async function workspaceContext() {
-  const pages = await prisma.page.findMany({ where: { isArchived: false }, take: 15, orderBy: { updatedAt: "desc" }, include: { blocks: true } });
-  return pages.map(page => {
-    const body = page.blocks.map(block => {
-      try { const content = JSON.parse(block.content); return content.text || ""; } catch { return ""; }
-    }).join("\n");
-    return `Page: ${page.title}\n${body}`;
-  }).join("\n\n---\n\n").slice(0, 30000);
+async function workspaceContext(query: string, scope: string, pageId?: string) {
+  if (scope === "none") return { text: "", sources: [] as Array<{ id: string; title: string }> };
+  const matches = scope === "current" ? (pageId ? [{ pageId }] : []) : await findRelevantPages(query);
+  const ids = matches.map(match => match.pageId);
+  const pages = ids.length ? await prisma.page.findMany({ where: { id: { in: ids }, isArchived: false }, include: { blocks: true, metadata: true } }) : [];
+  pages.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  const sources = pages.map(page => ({ id: page.id, title: page.title }));
+  const pageContext = pages.map(page => {
+    const body = page.blocks.map(block => plainText(block.content)).join("\n");
+    let tasks = "";
+    try { tasks = JSON.parse(page.metadata?.tasks || "[]").map((task: { title: string; completed: boolean; dueAt: string | null }) => `${task.completed ? "Done" : "Open"}: ${task.title}${task.dueAt ? ` (due ${task.dueAt})` : ""}`).join("\n"); } catch {}
+    return `Page: ${page.title} [${page.id}]\n${body}${tasks ? `\nTasks:\n${tasks}` : ""}`;
+  }).join("\n\n---\n\n");
+  if (scope === "current") return { text: pageContext.slice(0, 24000), sources };
+  const terms = query.match(/[A-Za-z0-9À-ž]{3,}/g)?.slice(0, 5) || [];
+  const rows = terms.length ? await prisma.row.findMany({ where: { OR: terms.map(term => ({ properties: { contains: term } })) }, take: 5, include: { page: true, database: { include: { properties: true, page: true } } } }) : [];
+  const rowContext = rows.filter(row => !row.page?.isArchived && !row.database.page?.isArchived).map(row => {
+    let values: Record<string, unknown> = {};
+    try { values = JSON.parse(row.properties); } catch {}
+    const fields = row.database.properties.map(property => `${property.name}: ${String(values[property.id] ?? "")}`).join("; ");
+    if (row.pageId && row.page) sources.push({ id: row.pageId, title: row.page.title });
+    return `Database: ${row.database.title}; Row: ${row.page?.title || row.id}; ${fields}`;
+  }).join("\n");
+  let taskContext = "";
+  if (/\b(tasks?|to-?dos?|due|overdue|deadlines?)\b/i.test(query)) {
+    const [metadata, taskRows] = await Promise.all([
+      prisma.pageMeta.findMany({ include: { page: { select: { id: true, title: true, isArchived: true } } } }),
+      prisma.row.findMany({ include: { page: { select: { id: true, title: true, isArchived: true } }, database: { include: { page: { select: { id: true, title: true, isArchived: true } }, properties: true } } } }),
+    ]);
+    const activeTasks: string[] = [];
+    for (const meta of metadata) {
+      if (meta.page.isArchived) continue;
+      try {
+        const tasks = JSON.parse(meta.tasks);
+        if (!Array.isArray(tasks)) continue;
+        for (const task of tasks) {
+          if (task && typeof task.title === "string" && !task.completed) {
+            activeTasks.push(`${task.title} (page: ${meta.page.title}${task.dueAt ? `, due: ${task.dueAt}` : ""})`);
+            sources.push({ id: meta.pageId, title: meta.page.title });
+          }
+        }
+      } catch {}
+    }
+    for (const row of taskRows) {
+      if (row.page?.isArchived || row.database.page?.isArchived) continue;
+      const properties = row.database.properties;
+      const checkbox = properties.find(property => property.type === "checkbox" && /complete|done/i.test(property.name));
+      const status = properties.find(property => property.type === "status");
+      const date = properties.find(property => property.type === "date" && /due|deadline/i.test(property.name));
+      if (!checkbox && !status && !date) continue;
+      try {
+        const values = JSON.parse(row.properties);
+        if ((checkbox && values[checkbox.id]) || (status && /^(done|complete|completed)$/i.test(String(values[status.id] || "")))) continue;
+        const title = properties.find(property => property.type === "title");
+        const taskTitle = String((title && values[title.id]) || row.page?.title || "Untitled task");
+        activeTasks.push(`${taskTitle} (database: ${row.database.title}${date && values[date.id] ? `, due: ${values[date.id]}` : ""})`);
+        const source = row.page || row.database.page;
+        if (source) sources.push({ id: source.id, title: source.title });
+      } catch {}
+    }
+    taskContext = activeTasks.length ? `Active tasks:\n${activeTasks.slice(0, 30).join("\n")}` : "No active tasks found.";
+  }
+  return { text: `${taskContext}\n${pageContext}\n${rowContext}`.slice(0, 30000), sources: Array.from(new Map(sources.map(source => [source.id, source])).values()) };
 }
 
 function conversation(history: unknown): string {
@@ -79,18 +135,34 @@ function conversation(history: unknown): string {
     .join("\n");
 }
 
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const scope = url.searchParams.get("scope") || "none";
+    if (!["none", "current", "workspace"].includes(scope)) return NextResponse.json({ error: "Invalid context scope" }, { status: 400 });
+    const context = await workspaceContext((url.searchParams.get("q") || "").slice(0, 300), scope, url.searchParams.get("pageId") || undefined);
+    return NextResponse.json({ sources: context.sources, preview: context.text }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("AI context preview failed", error);
+    return NextResponse.json({ error: "Context preview unavailable" }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const { mode, prompt, contextText, targetLanguage, history } = await request.json();
+    const { mode, prompt, contextText, targetLanguage, history, contextScope, pageId } = await request.json();
     const { provider, model, key } = await configuration();
     if (!key) return NextResponse.json({ code: "not_configured", error: "Add an AI provider key in Settings." }, { status: 409 });
     if (!model) return NextResponse.json({ code: "model_required", error: "Choose an AI model in Settings." }, { status: 409 });
     const text = String((mode === "write" ? prompt : contextText || prompt) || "").slice(0, 40000);
     if (!text.trim()) return NextResponse.json({ error: "Text is required" }, { status: 400 });
     let instruction = text;
+    let sources: Array<{ id: string; title: string }> = [];
     if (mode === "chat") {
       const earlier = conversation(history);
-      instruction = `Answer using the workspace context below. If it does not contain the answer, say so. Use the conversation so far to understand follow-up questions.\n\n${await workspaceContext()}\n\n${earlier ? `Conversation so far:\n${earlier}\n\n` : ""}Question: ${text}`;
+      const context = await workspaceContext(text, ["none", "current", "workspace"].includes(contextScope) ? contextScope : "none", typeof pageId === "string" ? pageId : undefined);
+      sources = context.sources;
+      instruction = `Answer using only the provided context for workspace facts. If it does not contain the answer, say so. Use the conversation so far for follow-up questions.\n\nContext:\n${context.text || "No workspace content was shared."}\n\n${earlier ? `Conversation so far:\n${earlier}\n\n` : ""}Question: ${text}`;
     }
     if (mode === "summarize") instruction = `Summarize the following text in two or three concise bullets:\n\n${text}`;
     if (mode === "fix_grammar") instruction = `Correct grammar and spelling while preserving meaning and tone. Return only the corrected text:\n\n${text}`;
@@ -112,7 +184,7 @@ export async function POST(request: Request) {
       if (!Array.isArray(tasks) || !tasks.every(task => typeof task.title === "string")) throw new Error("AI returned an invalid task list");
       return NextResponse.json({ tasks });
     }
-    return NextResponse.json(mode === "chat" ? { answer: result } : { result });
+    return NextResponse.json(mode === "chat" ? { answer: result, sources } : { result });
   } catch (error: any) {
     console.error("AI request failed", error instanceof SyntaxError ? "Invalid provider response" : "Provider error");
     return NextResponse.json({ error: error?.message || "AI request failed" }, { status: 502 });

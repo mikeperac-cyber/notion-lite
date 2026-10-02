@@ -3,15 +3,30 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
-vi.mock("@/lib/prisma", () => ({ prisma: { page: { findMany } } }));
+const { findMany, findRows, findRelevantPages } = vi.hoisted(() => ({ findMany: vi.fn(), findRows: vi.fn(), findRelevantPages: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: { page: { findMany }, row: { findMany: findRows } } }));
+vi.mock("@/lib/search", () => ({
+  findRelevantPages,
+  plainText: (content: string) => {
+    try {
+      const parsed = JSON.parse(content);
+      const collect = (node: any): string => [node?.text || "", ...(node?.content || []).map(collect)].join(" ");
+      return [parsed.text || "", collect(parsed.node)].join(" ");
+    } catch { return ""; }
+  },
+}));
 
 import { POST } from "./route";
 
 let dir: string;
 const fetchMock = vi.fn();
 
-const writeSettings = (settings: unknown) => fs.writeFile(path.join(dir, "settings.json"), JSON.stringify(settings));
+const writeSettings = (settings: any) => {
+  for (const [provider, key] of Object.entries(settings.aiKeys || {})) process.env[`NL_AI_KEY_${provider.toUpperCase()}`] = String(key);
+  const preferences = { ...settings };
+  delete preferences.aiKeys;
+  return fs.writeFile(path.join(dir, "settings.json"), JSON.stringify(preferences));
+};
 const reply = (payload: unknown, status = 200) => fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(payload), { status }));
 const call = (body: Record<string, unknown>) =>
   POST(new Request("http://localhost/api/ai", { method: "POST", body: JSON.stringify(body) }));
@@ -27,6 +42,10 @@ beforeEach(async () => {
   for (const key of Object.keys(process.env)) if (key.startsWith("NL_AI_KEY_")) delete process.env[key];
   fetchMock.mockReset();
   findMany.mockReset();
+  findRows.mockReset();
+  findRows.mockResolvedValue([]);
+  findRelevantPages.mockReset();
+  findRelevantPages.mockResolvedValue([]);
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -68,12 +87,12 @@ describe("/api/ai configuration", () => {
     expect(sent().headers.Authorization).toBe("Bearer env-key");
   });
 
-  it("prefers the saved key over the environment key", async () => {
-    await writeSettings({ aiProvider: "openai", aiModel: "m", aiKeys: { openai: "saved-key" } });
+  it("ignores a legacy plaintext key in settings", async () => {
+    await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ aiProvider: "openai", aiModel: "m", aiKeys: { openai: "saved-key" } }));
     process.env.NL_AI_KEY_OPENAI = "env-key";
     reply(chatReply("ok"));
     await call({ mode: "summarize", contextText: "hello" });
-    expect(sent().headers.Authorization).toBe("Bearer saved-key");
+    expect(sent().headers.Authorization).toBe("Bearer env-key");
   });
 });
 
@@ -307,10 +326,11 @@ describe("/api/ai modes", () => {
   });
 
   it("answers chat questions using workspace pages", async () => {
-    findMany.mockResolvedValue([{ title: "Roadmap", blocks: [{ content: JSON.stringify({ text: "Ship v2 in May" }) }, { content: "not json" }] }]);
+    findRelevantPages.mockResolvedValue([{ pageId: "page-1", title: "Roadmap" }]);
+    findMany.mockResolvedValue([{ id: "page-1", title: "Roadmap", blocks: [{ content: JSON.stringify({ text: "Ship v2 in May" }) }, { content: "not json" }] }]);
     reply(chatReply("May"));
-    const res = await call({ mode: "chat", prompt: "When do we ship?" });
-    expect(await res.json()).toEqual({ answer: "May" });
+    const res = await call({ mode: "chat", prompt: "When do we ship?", contextScope: "workspace" });
+    expect(await res.json()).toEqual({ answer: "May", sources: [{ id: "page-1", title: "Roadmap" }] });
     expect(prompt()).toContain("Page: Roadmap");
     expect(prompt()).toContain("Ship v2 in May");
     expect(prompt()).toContain("When do we ship?");

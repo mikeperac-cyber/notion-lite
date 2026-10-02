@@ -22,6 +22,7 @@ const PROVIDERS: Array<{ value: string; label: string; modelHint: string }> = [
 ];
 
 export function SettingsModal() {
+  const desktop = typeof window !== "undefined" && Boolean(window.electronAPI);
   const { settingsOpen, setSettingsOpen } = useAppStore();
   const [provider, setProvider] = useState("gemini");
   const [model, setModel] = useState("");
@@ -38,26 +39,32 @@ export function SettingsModal() {
     setError("");
     setKey("");
     setLoading(true);
-    fetch("/api/settings")
-      .then(res => res.json())
+    (desktop ? window.electronAPI!.getAiSettings() : fetch("/api/settings").then(res => res.json()))
       .then(data => {
-        setProvider(data.aiProvider || "gemini");
-        setModel(data.aiModel || "");
-        setKeyPreviews(data.keyPreviews || {});
+        setProvider(data.provider || data.aiProvider || "gemini");
+        setModel(data.model || data.aiModel || "");
+        setKeyPreviews(data.configured ? Object.fromEntries(Object.entries(data.configured).filter(([, active]) => active).map(([name]) => [name, "Saved in Windows Credential Manager"])) : data.keyPreviews || {});
       })
       .catch(() => setError("Could not load current settings."))
       .finally(() => setLoading(false));
-  }, [settingsOpen]);
+  }, [settingsOpen, desktop]);
 
   const handleSave = async () => {
     setSaving(true);
     setError("");
     setSaved(false);
     try {
+      if (desktop) {
+        const data = await window.electronAPI!.setAiSettings({ provider, model, key });
+        setKeyPreviews(Object.fromEntries(Object.entries(data.configured || {}).filter(([, active]) => active).map(([name]) => [name, "Saved in Windows Credential Manager"])));
+        setKey("");
+        setSaved(true);
+        return;
+      }
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ aiProvider: provider, aiModel: model, aiKey: key || undefined }),
+        body: JSON.stringify({ aiProvider: provider, aiModel: model }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save settings");
@@ -83,7 +90,7 @@ export function SettingsModal() {
             <DialogTitle className="text-base font-semibold">AI Settings</DialogTitle>
           </div>
           <DialogDescription className="text-xs text-muted-foreground">
-            Choose a provider and add your own API key. Keys are stored locally and never leave this device.
+            Choose a provider and model. Desktop keys are stored in Windows Credential Manager. AI requests send selected content to the provider.
           </DialogDescription>
         </DialogHeader>
 
@@ -126,7 +133,8 @@ export function SettingsModal() {
                 type="password"
                 value={key}
                 onChange={e => setKey(e.target.value)}
-                placeholder={activePreview ? `Saved (${activePreview}) — enter a new key to replace` : "Paste your API key"}
+                disabled={!desktop}
+                placeholder={!desktop ? "Set NL_AI_KEY_<PROVIDER> in your development environment" : activePreview ? "Key saved — enter a new key to replace" : "Paste your API key"}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-indigo-500 font-mono"
               />
               {activePreview && !key && (
@@ -134,6 +142,7 @@ export function SettingsModal() {
                   <Check className="h-3 w-3" /> Key saved and active for this provider
                 </p>
               )}
+              {!desktop && <p className="text-[11px] text-muted-foreground">Web development reads the provider key from an environment variable.</p>}
             </div>
 
             {error && (

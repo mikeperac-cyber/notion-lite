@@ -5,10 +5,10 @@ import { ensureSyncedTable } from "@/lib/schema-upgrade";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
   try {
-    const { pageId } = params;
+    const { pageId } = await params;
 
     const page = await prisma.page.findUnique({
       where: { id: pageId },
@@ -125,10 +125,10 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
   try {
-    const { pageId } = params;
+    const { pageId } = await params;
     const body = await req.json();
     const {
       title,
@@ -219,10 +219,10 @@ export async function PATCH(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
   try {
-    const { pageId } = params;
+    const { pageId } = await params;
     const { searchParams } = new URL(req.url);
     const permanent = searchParams.get("permanent") === "true";
 

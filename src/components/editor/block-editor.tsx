@@ -113,12 +113,18 @@ const GlobalId = Extension.create({
 export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEditorProps) {
   const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [recoveryDraft, setRecoveryDraft] = useState<any | null>(null);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [translateMenuOpen, setTranslateMenuOpen] = useState(false);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
   const [linkChoices, setLinkChoices] = useState<Array<{ id: string; title: string; icon: string | null }>>([]);
   const [linkQuery, setLinkQuery] = useState("");
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingBlocksRef = useRef<any[] | null>(null);
+  const saveInFlightRef = useRef(false);
+  const flushRef = useRef<() => Promise<void>>(async () => {});
+  const draftKey = `notionlite:draft:${pageId}`;
 
   // Parse initial content from block models into HTML or JSON
   const getInitialContent = () => {
@@ -255,12 +261,15 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
         editor.view.dispatch(transaction);
         return;
       }
+      const json = editor.getJSON();
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({ savedAt: Date.now(), doc: json }));
+      } catch {
+        setSaveError("Local recovery storage is full. Keep this page open until it saves.");
+      }
       setIsSaving(true);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
-      saveTimeoutRef.current = setTimeout(async () => {
-        try {
-          const json = editor.getJSON();
+      {
           // Extract top level nodes into block array
           const currentBlocks = (json.content || []).map((node, index) => {
             let type = "paragraph";
@@ -293,50 +302,63 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
               syncedBlockId: node.type === "syncedBlock" ? node.attrs?.syncId : null,
             };
           });
-
-          // Diff logic
-          const changedBlocks = [];
-          const orderedBlockIds = [];
-          
-          for (let i = 0; i < currentBlocks.length; i++) {
-            const b = currentBlocks[i];
-            const previous = b.id ? lastSavedBlocksRef.current.find(prev => prev.id === b.id) : null;
-            
-            if (!previous || previous.type !== b.type || JSON.stringify(previous.content) !== JSON.stringify(b.content) || previous.order !== b.order) {
-               changedBlocks.push(b);
-            }
-            orderedBlockIds.push(b.id);
-          }
-          
-          const currentIds = new Set(orderedBlockIds);
-          const deletedBlockIds = lastSavedBlocksRef.current
-            .map(b => b.id)
-            .filter(id => id && !currentIds.has(id));
-
-          const response = await fetch("/api/blocks", {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              ...(typeof window !== "undefined" && (window as any).env?.internalSecret ? { "x-internal-secret": (window as any).env.internalSecret } : {})
-            },
-            body: JSON.stringify({ pageId, changedBlocks, deletedBlockIds, orderedBlockIds }),
-          });
-          if (!response.ok) throw new Error("Block save failed");
-          
-          // Update ref
-          lastSavedBlocksRef.current = currentBlocks;
-        } catch (err) {
-          console.error("Auto-save failed", err);
-        } finally {
-          setIsSaving(false);
-        }
-      }, 400);
+          pendingBlocksRef.current = currentBlocks;
+      }
+      saveTimeoutRef.current = setTimeout(() => void flushRef.current(), 400);
     },
   });
 
+  flushRef.current = async () => {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    try {
+      while (pendingBlocksRef.current) {
+        const currentBlocks = pendingBlocksRef.current;
+        pendingBlocksRef.current = null;
+        const previousById = new Map(lastSavedBlocksRef.current.map(block => [block.id, block]));
+        const changedBlocks = currentBlocks.filter(block => {
+          const previous = previousById.get(block.id);
+          return !previous || previous.type !== block.type || JSON.stringify(previous.content) !== JSON.stringify(block.content) || previous.order !== block.order;
+        });
+        const orderedBlockIds = currentBlocks.map(block => block.id);
+        const currentIds = new Set(orderedBlockIds);
+        const deletedBlockIds = lastSavedBlocksRef.current.map(block => block.id).filter(id => id && !currentIds.has(id));
+        try {
+          const response = await fetch("/api/blocks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pageId, changedBlocks, deletedBlockIds, orderedBlockIds }),
+          });
+          if (!response.ok) throw new Error(`Save failed (HTTP ${response.status})`);
+          lastSavedBlocksRef.current = currentBlocks;
+          setSaveError("");
+          if (!pendingBlocksRef.current) localStorage.removeItem(draftKey);
+        } catch (error) {
+          pendingBlocksRef.current ??= currentBlocks;
+          setSaveError(error instanceof Error ? error.message : "Save failed");
+          break;
+        }
+      }
+    } finally {
+      saveInFlightRef.current = false;
+      setIsSaving(Boolean(pendingBlocksRef.current));
+    }
+  };
+
   useEffect(() => {
-    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-  }, []);
+    try {
+      const draft = JSON.parse(localStorage.getItem(draftKey) || "null");
+      const serverUpdated = Math.max(0, ...(initialBlocks || []).map(block => new Date(block.updatedAt).getTime() || 0));
+      if (draft?.doc?.type === "doc" && draft.savedAt > serverUpdated) setRecoveryDraft(draft.doc);
+    } catch {}
+    const onPageHide = () => void flushRef.current();
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      window.removeEventListener("pagehide", onPageHide);
+      void flushRef.current();
+    };
+  }, [draftKey, initialBlocks]);
 
   useEffect(() => {
     if (!editor) return;
@@ -381,8 +403,10 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
   return (
     <div className="w-full relative min-h-[400px]">
       {/* Floating Save Status */}
-      <div className="absolute top-2 right-4 text-[11px] text-muted-foreground flex items-center gap-1 pointer-events-none">
-        {isSaving ? (
+      <div role="status" className="absolute top-2 right-4 z-10 text-[11px] text-muted-foreground flex items-center gap-1">
+        {saveError ? (
+          <button className="text-red-600 underline" onClick={() => void flushRef.current()}>{saveError} · Retry</button>
+        ) : isSaving ? (
           <span className="flex items-center gap-1 text-amber-500">
             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
             Saving...
@@ -394,6 +418,11 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
           </span>
         )}
       </div>
+      {recoveryDraft && <div className="mt-8 flex items-center gap-2 rounded border border-amber-400 p-2 text-xs">
+        Unsaved text from this page is available.
+        <Button size="xs" onClick={() => { editor?.commands.setContent(recoveryDraft); setRecoveryDraft(null); }}>Recover</Button>
+        <Button size="xs" variant="ghost" onClick={() => { localStorage.removeItem(draftKey); setRecoveryDraft(null); }}>Discard</Button>
+      </div>}
 
       {/* Inline Selection Bubble Menu */}
       {editor && (

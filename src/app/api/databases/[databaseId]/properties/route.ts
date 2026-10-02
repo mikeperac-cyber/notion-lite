@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
-    const { databaseId } = params;
+    const { databaseId } = await params;
     const body = await req.json();
     const { name, type, config } = body;
     if (type === "person") return NextResponse.json({ error: "People are not configured for this local workspace" }, { status: 400 });
@@ -48,13 +48,13 @@ export async function POST(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
     const body = await req.json();
     const { propertyId, name, type, config, order } = body;
     if (typeof propertyId !== "string") return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
-    const existing = await prisma.property.findFirst({ where: { id: propertyId, databaseId: params.databaseId }, select: { id: true } });
+    const existing = await prisma.property.findFirst({ where: { id: propertyId, databaseId: (await params).databaseId }, select: { id: true } });
     if (!existing) return NextResponse.json({ error: "Property not found" }, { status: 404 });
 
     const updated = await prisma.property.update({
@@ -82,7 +82,7 @@ export async function PATCH(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { databaseId: string } }
+  { params }: { params: Promise<{ databaseId: string }> }
 ) {
   try {
     const { searchParams } = new URL(req.url);
@@ -90,7 +90,7 @@ export async function DELETE(
     if (!propertyId) {
       return NextResponse.json({ error: "Missing propertyId" }, { status: 400 });
     }
-    const existing = await prisma.property.findFirst({ where: { id: propertyId, databaseId: params.databaseId }, select: { id: true } });
+    const existing = await prisma.property.findFirst({ where: { id: propertyId, databaseId: (await params).databaseId }, select: { id: true } });
     if (!existing) return NextResponse.json({ error: "Property not found" }, { status: 404 });
 
     await prisma.property.delete({

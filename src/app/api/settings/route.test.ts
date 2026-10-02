@@ -17,6 +17,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.NOTIONLITE_DATA_DIR;
+  for (const key of Object.keys(process.env)) if (key.startsWith("NL_AI_KEY_")) delete process.env[key];
   await fs.rm(dir, { recursive: true, force: true });
 });
 
@@ -26,8 +27,10 @@ describe("/api/settings", () => {
     expect(data).toEqual({ aiProvider: "gemini", aiModel: "", keyPreviews: {} });
   });
 
-  it("saves provider, model and key, and only returns a masked preview", async () => {
-    await post({ aiProvider: "openai", aiModel: "gpt-4o-mini", aiKey: "sk-secret-1234" });
+  it("saves provider and model without accepting plaintext keys", async () => {
+    expect((await post({ aiProvider: "openai", aiModel: "m", aiKey: "secret" })).status).toBe(400);
+    process.env.NL_AI_KEY_OPENAI = "sk-secret-1234";
+    await post({ aiProvider: "openai", aiModel: "gpt-4o-mini" });
     const res = await GET();
     const text = JSON.stringify(await res.clone().json());
     const data = await res.json();
@@ -42,17 +45,20 @@ describe("/api/settings", () => {
     expect((await (await GET()).json()).aiProvider).toBe("gemini");
   });
 
-  it("keeps an existing key when saved again without one", async () => {
-    await post({ aiProvider: "gemini", aiModel: "a", aiKey: "key-abcd" });
+  it("keeps an environment key when preferences change", async () => {
+    process.env.NL_AI_KEY_GEMINI = "key-abcd";
+    await post({ aiProvider: "gemini", aiModel: "a" });
     await post({ aiProvider: "gemini", aiModel: "b" });
     const data = await (await GET()).json();
     expect(data.aiModel).toBe("b");
     expect(data.keyPreviews.gemini).toBe("••••abcd");
   });
 
-  it("keeps keys for other providers when switching", async () => {
-    await post({ aiProvider: "gemini", aiModel: "a", aiKey: "gem-1111" });
-    await post({ aiProvider: "anthropic", aiModel: "b", aiKey: "ant-2222" });
+  it("reports keys for other providers when switching", async () => {
+    process.env.NL_AI_KEY_GEMINI = "gem-1111";
+    process.env.NL_AI_KEY_ANTHROPIC = "ant-2222";
+    await post({ aiProvider: "gemini", aiModel: "a" });
+    await post({ aiProvider: "anthropic", aiModel: "b" });
     const { keyPreviews } = await (await GET()).json();
     expect(keyPreviews).toEqual({ gemini: "••••1111", anthropic: "••••2222" });
   });

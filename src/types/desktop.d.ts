@@ -10,6 +10,7 @@ declare global {
       ready: () => void;
       getSettings: () => Promise<Record<string, any>>;
       setSettings: (changes: Record<string, any>) => Promise<Record<string, any>>;
+      chooseBackupDirectory: () => Promise<Record<string, any>>;
       saveFile: (request: { format: "md" | "html" | "json"; filename: string; content: string }) => Promise<{ canceled: boolean }>;
       createBackup: () => Promise<{ canceled: boolean; path?: string }>;
       restoreBackup: () => Promise<{ canceled: boolean }>;

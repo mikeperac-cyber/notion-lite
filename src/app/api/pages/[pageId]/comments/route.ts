@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
   try {
-    const { pageId } = params;
+    const { pageId } = await params;
     const comments = await prisma.comment.findMany({
       where: { pageId },
       orderBy: { createdAt: "asc" },
@@ -24,10 +24,10 @@ export async function GET(
 
 export async function POST(
   _req: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
   try {
-    const { pageId } = params;
+    const { pageId } = await params;
     const body = await _req.json();
     const { content, authorName = "You", authorAvatar } = body;
 
@@ -59,7 +59,7 @@ export async function POST(
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { pageId: string } }
+  { params }: { params: Promise<{ pageId: string }> }
 ) {
   try {
     const { searchParams } = new URL(req.url);
