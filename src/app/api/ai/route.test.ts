@@ -213,6 +213,46 @@ describe("/api/ai modes", () => {
     expect(prompt()).toContain("source text");
   });
 
+  it("includes earlier turns so follow-up questions work", async () => {
+    findMany.mockResolvedValue([]);
+    reply(chatReply("shorter"));
+    await call({
+      mode: "chat",
+      prompt: "make that shorter",
+      history: [
+        { role: "user", content: "Summarize the roadmap" },
+        { role: "assistant", content: "Ship v2 in May after the beta." },
+      ],
+    });
+    expect(prompt()).toContain("Conversation so far:\nUser: Summarize the roadmap\nAssistant: Ship v2 in May after the beta.");
+    expect(prompt()).toContain("Question: make that shorter");
+  });
+
+  it("keeps only the 10 most recent turns and truncates long ones", async () => {
+    findMany.mockResolvedValue([]);
+    reply(chatReply("ok"));
+    const history = Array.from({ length: 14 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `turn-${i} ${"x".repeat(i === 13 ? 5000 : 0)}` }));
+    await call({ mode: "chat", prompt: "next", history });
+    expect(prompt()).not.toContain("turn-3 ");
+    expect(prompt()).toContain("turn-4 ");
+    expect(prompt().match(/turn-13 x+/)![0]).toHaveLength(2000);
+  });
+
+  it("ignores malformed history entries", async () => {
+    findMany.mockResolvedValue([]);
+    reply(chatReply("ok"));
+    await call({ mode: "chat", prompt: "hi", history: [null, 5, { role: "system", content: "evil" }, { role: "user", content: "" }, { role: "user" }] });
+    expect(prompt()).not.toContain("Conversation so far");
+    expect(prompt()).not.toContain("evil");
+  });
+
+  it("ignores history that is not an array", async () => {
+    findMany.mockResolvedValue([]);
+    reply(chatReply("ok"));
+    await call({ mode: "chat", prompt: "hi", history: "nope" });
+    expect(prompt()).not.toContain("Conversation so far");
+  });
+
   it("answers chat questions using workspace pages", async () => {
     findMany.mockResolvedValue([{ title: "Roadmap", blocks: [{ content: JSON.stringify({ text: "Ship v2 in May" }) }, { content: "not json" }] }]);
     reply(chatReply("May"));

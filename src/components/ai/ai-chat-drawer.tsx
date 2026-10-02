@@ -11,7 +11,9 @@ import {
   Check,
   PlusCircle,
   Settings as SettingsIcon,
+  Trash2,
 } from "lucide-react";
+import { MarkdownText } from "./markdown-text";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -20,7 +22,14 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   notConfigured?: boolean;
+  error?: boolean;
 }
+
+const GREETING: Message = {
+  role: "assistant",
+  content:
+    "Hello! I am your Notion Lite Workspace AI. Ask me anything about your project roadmap, task statuses, or documentation, or ask me to draft content for you.",
+};
 
 const PROVIDER_LABELS: Record<string, string> = {
   gemini: "Google Gemini",
@@ -34,13 +43,7 @@ const PROVIDER_LABELS: Record<string, string> = {
 export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) => void }) {
   const insertText = onInsertText || ((text: string) => window.dispatchEvent(new CustomEvent("ai-insert", { detail: text })));
   const { aiChatOpen, setAiChatOpen, setSettingsOpen } = useAppStore();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: "assistant",
-      content:
-        "Hello! I am your Notion Lite Workspace AI. Ask me anything about your project roadmap, task statuses, or documentation, or ask me to draft content for you.",
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -64,6 +67,9 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
     const textToSend = customPrompt || input;
     if (!textToSend.trim() || loading) return;
 
+    const history = messages
+      .filter((msg) => msg !== GREETING && !msg.error && !msg.notConfigured)
+      .map(({ role, content }) => ({ role, content }));
     const userMsg: Message = { role: "user", content: textToSend };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
@@ -76,6 +82,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
         body: JSON.stringify({
           mode: "chat",
           prompt: textToSend,
+          history,
         }),
       });
 
@@ -84,7 +91,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
         const notConfigured = data.code === "not_configured" || data.code === "model_required";
         setMessages((prev) => [
           ...prev,
-          { role: "assistant", content: data.error || `AI request failed (HTTP ${res.status})`, notConfigured },
+          { role: "assistant", content: data.error || `AI request failed (HTTP ${res.status})`, notConfigured, error: true },
         ]);
         return;
       }
@@ -99,6 +106,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
         {
           role: "assistant",
           content: err?.message || "Sorry, I encountered an error answering your request.",
+          error: true,
         },
       ]);
     } finally {
@@ -127,12 +135,24 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
             </span>
           </div>
         </div>
-        <button
-          onClick={() => setAiChatOpen(false)}
-          className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {messages.length > 1 && (
+            <button
+              onClick={() => setMessages([GREETING])}
+              title="Clear conversation"
+              className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={() => setAiChatOpen(false)}
+            title="Close"
+            className="p-1 rounded-md hover:bg-muted text-muted-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Message List */}
@@ -158,7 +178,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
                     : "bg-muted text-foreground border border-border/60"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === "assistant" ? <MarkdownText text={msg.content} /> : <p className="whitespace-pre-wrap">{msg.content}</p>}
 
                 {msg.notConfigured && (
                   <button
@@ -207,7 +227,7 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
           {loading && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground italic">
               <Sparkles className="h-3.5 w-3.5 animate-spin text-indigo-500" />
-              Gemini is thinking...
+              Thinking...
             </div>
           )}
         </div>

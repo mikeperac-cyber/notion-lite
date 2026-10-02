@@ -70,16 +70,28 @@ async function workspaceContext() {
   }).join("\n\n---\n\n").slice(0, 30000);
 }
 
+function conversation(history: unknown): string {
+  if (!Array.isArray(history)) return "";
+  return history
+    .slice(-10)
+    .filter(turn => turn && (turn.role === "user" || turn.role === "assistant") && typeof turn.content === "string" && turn.content.trim())
+    .map(turn => `${turn.role === "user" ? "User" : "Assistant"}: ${turn.content.slice(0, 2000)}`)
+    .join("\n");
+}
+
 export async function POST(request: Request) {
   try {
-    const { mode, prompt, contextText, targetLanguage } = await request.json();
+    const { mode, prompt, contextText, targetLanguage, history } = await request.json();
     const { provider, model, key } = await configuration();
     if (!key) return NextResponse.json({ code: "not_configured", error: "Add an AI provider key in Settings." }, { status: 409 });
     if (!model) return NextResponse.json({ code: "model_required", error: "Choose an AI model in Settings." }, { status: 409 });
     const text = String(contextText || prompt || "").slice(0, 40000);
     if (!text.trim()) return NextResponse.json({ error: "Text is required" }, { status: 400 });
     let instruction = text;
-    if (mode === "chat") instruction = `Answer using the workspace context below. If it does not contain the answer, say so.\n\n${await workspaceContext()}\n\nQuestion: ${text}`;
+    if (mode === "chat") {
+      const earlier = conversation(history);
+      instruction = `Answer using the workspace context below. If it does not contain the answer, say so. Use the conversation so far to understand follow-up questions.\n\n${await workspaceContext()}\n\n${earlier ? `Conversation so far:\n${earlier}\n\n` : ""}Question: ${text}`;
+    }
     if (mode === "summarize") instruction = `Summarize the following text in two or three concise bullets:\n\n${text}`;
     if (mode === "fix_grammar") instruction = `Correct grammar and spelling while preserving meaning and tone. Return only the corrected text:\n\n${text}`;
     if (mode === "translate") instruction = `Translate to ${String(targetLanguage || "English").slice(0, 60)}. Return only the translation:\n\n${text}`;

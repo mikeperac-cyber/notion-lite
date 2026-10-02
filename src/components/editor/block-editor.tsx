@@ -35,6 +35,8 @@ import {
   Settings as SettingsIcon,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
+import { toTiptapContent } from "@/lib/ai-markdown";
+import { MarkdownText } from "@/components/ai/markdown-text";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SlashCommandList, getSuggestionItems, CommandItem } from "./slash-command";
@@ -357,7 +359,8 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
     if (!editor) return;
     const insertAi = (event: Event) => {
       const value = (event as CustomEvent<string>).detail;
-      if (value && window.confirm(`Insert this AI response into the page?\n\n${value}`)) editor.chain().focus().insertContent(value).run();
+      const content = value ? toTiptapContent(value) : [];
+      if (content.length && window.confirm(`Insert this AI response into the page?\n\n${value}`)) editor.chain().focus().insertContent(content).run();
     };
     window.addEventListener("ai-insert", insertAi);
     return () => window.removeEventListener("ai-insert", insertAi);
@@ -442,10 +445,12 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
 
   const applyAiResult = (mode: "replace" | "insert") => {
     if (!editor || !aiPreview?.result) return;
+    const content = toTiptapContent(aiPreview.result);
+    if (!content.length) return;
     if (mode === "replace" && aiPreview.hasSelection) {
-      editor.commands.insertContentAt({ from: aiPreview.selectionFrom, to: aiPreview.selectionTo }, aiPreview.result);
+      editor.commands.insertContentAt({ from: aiPreview.selectionFrom, to: aiPreview.selectionTo }, content);
     } else {
-      editor.commands.insertContent(aiPreview.result);
+      editor.commands.insertContent(content);
     }
     setAiPreview(null);
   };
@@ -659,7 +664,7 @@ export function BlockEditor({ pageId, initialBlocks, readOnly = false }: BlockEd
 
               {!aiPreview.loading && !aiPreview.error && aiPreview.result !== null && (
                 <div className="space-y-2">
-                  <p className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded border border-border/60 p-1.5 bg-muted/40">{aiPreview.result}</p>
+                  <div className="max-h-40 overflow-y-auto rounded border border-border/60 p-1.5 bg-muted/40"><MarkdownText text={aiPreview.result} /></div>
                   <div className="flex justify-end gap-1.5">
                     <Button size="xs" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => setAiPreview(null)}>Discard</Button>
                     <Button size="xs" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => runAiAction(aiPreview.action)}>
