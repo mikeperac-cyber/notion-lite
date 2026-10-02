@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Sparkles,
   Send,
@@ -10,6 +10,7 @@ import {
   Copy,
   Check,
   PlusCircle,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -18,11 +19,21 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  notConfigured?: boolean;
 }
+
+const PROVIDER_LABELS: Record<string, string> = {
+  gemini: "Google Gemini",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  openrouter: "OpenRouter",
+  opencode: "opencode zen",
+  nvidia: "NVIDIA NIM",
+};
 
 export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) => void }) {
   const insertText = onInsertText || ((text: string) => window.dispatchEvent(new CustomEvent("ai-insert", { detail: text })));
-  const { aiChatOpen, setAiChatOpen } = useAppStore();
+  const { aiChatOpen, setAiChatOpen, setSettingsOpen } = useAppStore();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -33,6 +44,19 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [providerLabel, setProviderLabel] = useState("AI Assistant");
+  const [configured, setConfigured] = useState(true);
+
+  useEffect(() => {
+    if (!aiChatOpen) return;
+    fetch("/api/settings")
+      .then(res => res.json())
+      .then(data => {
+        setProviderLabel(PROVIDER_LABELS[data.aiProvider] || "AI Assistant");
+        setConfigured(!!data.keyPreviews?.[data.aiProvider]);
+      })
+      .catch(() => {});
+  }, [aiChatOpen]);
 
   if (!aiChatOpen) return null;
 
@@ -56,7 +80,14 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `AI request failed (HTTP ${res.status})`);
+      if (!res.ok) {
+        const notConfigured = data.code === "not_configured" || data.code === "model_required";
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: data.error || `AI request failed (HTTP ${res.status})`, notConfigured },
+        ]);
+        return;
+      }
       const assistantMsg: Message = {
         role: "assistant",
         content: data.answer || data.result || "No response generated.",
@@ -91,7 +122,9 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
           </div>
           <div>
             <h3 className="text-sm font-semibold leading-none">Workspace AI</h3>
-            <span className="text-[11px] text-muted-foreground">Gemini RAG Assistant</span>
+            <span className="text-[11px] text-muted-foreground">
+              {configured ? providerLabel : "Not configured"}
+            </span>
           </div>
         </div>
         <button
@@ -127,7 +160,17 @@ export function AiChatDrawer({ onInsertText }: { onInsertText?: (text: string) =
               >
                 <p className="whitespace-pre-wrap">{msg.content}</p>
 
-                {msg.role === "assistant" && i !== 0 && (
+                {msg.notConfigured && (
+                  <button
+                    onClick={() => { setAiChatOpen(false); setSettingsOpen(true); }}
+                    className="mt-2 text-[10px] flex items-center gap-1 text-indigo-500 hover:text-indigo-600 font-medium"
+                  >
+                    <SettingsIcon className="h-3 w-3" />
+                    Open Settings
+                  </button>
+                )}
+
+                {msg.role === "assistant" && i !== 0 && !msg.notConfigured && (
                   <div className="flex items-center gap-2 mt-2 pt-2 border-t border-border/40 justify-end">
                     <button
                       onClick={() => handleCopy(msg.content, i)}

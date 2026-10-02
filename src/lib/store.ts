@@ -13,7 +13,8 @@ interface AppState {
   trashCount: number;
   aiChatOpen: boolean;
   commentsDrawerOpen: boolean;
-  
+  settingsOpen: boolean;
+
   // Setters
   setCurrentWorkspace: (workspace: WorkspaceSchema | null) => void;
   setPagesTree: (pages: PageSchema[]) => void;
@@ -26,7 +27,8 @@ interface AppState {
   setTrashCount: (count: number) => void;
   setAiChatOpen: (open: boolean) => void;
   setCommentsDrawerOpen: (open: boolean) => void;
-  
+  setSettingsOpen: (open: boolean) => void;
+
   // Page Tree Mutations
   addPageToTree: (page: PageSchema) => void;
   updatePageInTree: (pageId: string, updates: Partial<PageSchema>) => void;
@@ -44,6 +46,7 @@ export const useAppStore = create<AppState>((set) => ({
   trashCount: 0,
   aiChatOpen: false,
   commentsDrawerOpen: false,
+  settingsOpen: false,
 
   setCurrentWorkspace: (workspace) => set({ currentWorkspace: workspace }),
   setPagesTree: (pages) => set({ pagesTree: pages }),
@@ -56,6 +59,7 @@ export const useAppStore = create<AppState>((set) => ({
   setTrashCount: (count) => set({ trashCount: count }),
   setAiChatOpen: (open) => set({ aiChatOpen: open }),
   setCommentsDrawerOpen: (open) => set({ commentsDrawerOpen: open }),
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
 
   addPageToTree: (page) =>
     set((state) => ({

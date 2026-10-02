@@ -18,12 +18,14 @@ import {
   Laptop,
   Star,
   Trash2,
+  Settings,
 } from "lucide-react";
 import { useAppStore } from "@/lib/store";
 import { PageItem } from "./page-item";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { TrashModal } from "@/components/modals/trash-modal";
+import { SettingsModal } from "@/components/modals/settings-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,6 +53,7 @@ export function Sidebar() {
     setTrashModalOpen,
     trashCount,
     setTrashCount,
+    setSettingsOpen,
   } = useAppStore();
 
   const loadWorkspace = React.useCallback(async () => {
@@ -285,6 +288,16 @@ export function Sidebar() {
           </div>
 
           <div className="flex items-center justify-between px-2 pt-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setSettingsOpen(true)}
+              title="AI Settings"
+            >
+              <Settings className="h-3.5 w-3.5 text-zinc-400" />
+              <span className="sr-only">Settings</span>
+            </Button>
             <span className="text-[11px] text-zinc-400">Theme</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -310,6 +323,7 @@ export function Sidebar() {
         </div>
       </aside>
       <TrashModal />
+      <SettingsModal />
     </>
   );
 }

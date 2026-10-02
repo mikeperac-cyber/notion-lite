@@ -42,6 +42,9 @@ prisma/*.db-wal
 prisma/*.db-shm
 .env
 .env.*
+
+# local AI provider settings (contains API keys)
+settings.json
 !.env.example
 /dist-electron/
 /local-backups/

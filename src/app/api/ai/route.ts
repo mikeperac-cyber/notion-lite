@@ -15,7 +15,7 @@ async function configuration(): Promise<{ provider: Provider; model: string; key
   } catch {}
   const provider: Provider = providers.includes(saved.aiProvider) ? saved.aiProvider : "gemini";
   const model = String(saved.aiModel || process.env.GEMINI_MODEL || "").trim();
-  let key = process.env[`NL_AI_KEY_${provider.toUpperCase()}`] || "";
+  const key = (saved.aiKeys && saved.aiKeys[provider]) || process.env[`NL_AI_KEY_${provider.toUpperCase()}`] || "";
   return { provider, model, key };
 }
 
