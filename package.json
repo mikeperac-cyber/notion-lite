@@ -10,6 +10,7 @@
     "build:analyze": "ANALYZE=true node --max-old-space-size=4096 node_modules/next/dist/bin/next build",
     "build:profile": "node --max-old-space-size=4096 node_modules/next/dist/bin/next build --profile",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
@@ -114,6 +115,7 @@
     "sharp": "^0.35.4",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.5",
+    "vitest": "^3.2.7",
     "wait-on": "^7.2.0"
   },
   "allowScripts": {

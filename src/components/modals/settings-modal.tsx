@@ -16,7 +16,7 @@ const PROVIDERS: Array<{ value: string; label: string; modelHint: string }> = [
   { value: "gemini", label: "Google Gemini", modelHint: "e.g. gemini-1.5-flash" },
   { value: "openai", label: "OpenAI", modelHint: "e.g. gpt-4o-mini" },
   { value: "anthropic", label: "Anthropic", modelHint: "e.g. claude-3-5-sonnet-latest" },
-  { value: "openrouter", label: "OpenRouter", modelHint: "e.g. meta-llama/llama-3.1-70b-instruct" },
+  { value: "openrouter", label: "OpenRouter", modelHint: "include the vendor, e.g. z-ai/glm-5.3-flash" },
   { value: "opencode", label: "opencode zen", modelHint: "e.g. gpt-4o-mini" },
   { value: "nvidia", label: "NVIDIA NIM", modelHint: "e.g. meta/llama-3.1-70b-instruct" },
 ];

@@ -27,7 +27,13 @@ async function requestJson(url: string, _key: string, body: unknown, headers: Re
     signal: AbortSignal.timeout(60000),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? "AI key was rejected" : response.status === 429 ? "AI rate limit reached" : `AI provider returned ${response.status}`);
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new Error("AI key was rejected");
+    if (response.status === 429) throw new Error("AI rate limit reached");
+    const detail = String(payload?.error?.message || payload?.error || payload?.detail || payload?.message || "").slice(0, 200);
+    const hint = response.status === 400 || response.status === 404 ? " Check the model name in Settings." : "";
+    throw new Error(`AI provider returned ${response.status}${detail ? `: ${detail}` : ""}.${hint}`);
+  }
   return payload;
 }
 
