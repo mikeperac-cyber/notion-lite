@@ -10,6 +10,7 @@ interface Task { id: string; title: string; dueAt: string | null; completed: boo
 
 export function PageOrganizer({ pageId, initialParentId }: { pageId: string; initialParentId: string | null }) {
   const { setPagesTree } = useAppStore();
+  const [expanded, setExpanded] = useState(false);
   const [choices, setChoices] = useState<Choice[]>([]);
   const [backlinks, setBacklinks] = useState<Choice[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -91,8 +92,21 @@ export function PageOrganizer({ pageId, initialParentId }: { pageId: string; ini
     for (const choice of choices) if (choice.parentId && descendants.has(choice.parentId) && !descendants.has(choice.id)) { descendants.add(choice.id); changed = true; }
   }
 
-  return <section aria-label="Page organization" className="mx-auto mt-2 w-full max-w-4xl rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3 text-xs">
-    <div className="flex flex-wrap items-center gap-2">
+  return (
+    <section aria-label="Page organization" className="mx-auto mt-2 w-full max-w-4xl">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls="page-organizer-panel"
+        className="flex w-full items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs transition hover:bg-muted/40"
+      >
+        <span className="font-semibold">Notebook <span className="font-normal text-muted-foreground">— Tags, tasks, backlinks</span></span>
+        <span className="text-muted-foreground text-[10px] select-none">{expanded ? "−" : "+"}</span>
+      </button>
+      <div id="page-organizer-panel" className={`overflow-hidden transition-all duration-300 ease-in-out ${expanded ? "max-h-[600px] opacity-100 mt-2" : "max-h-0 opacity-0"}`}>
+        <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
       <label htmlFor="notebook-picker" className="font-semibold">Notebook</label>
       <select id="notebook-picker" value={parentId} onChange={event => void moveToNotebook(event.target.value)} className="rounded border border-border bg-background px-2 py-1 max-w-52">
         <option value="">Top level</option>
@@ -125,5 +139,8 @@ export function PageOrganizer({ pageId, initialParentId }: { pageId: string; ini
       {backlinks.length ? <div className="flex flex-wrap gap-2 mt-1">{backlinks.map(link => <Link key={link.id} href={`/editor/${link.id}`} className="text-indigo-600 hover:underline">{link.icon || "📄"} {link.title}</Link>)}</div> : <p className="text-muted-foreground mt-1">Pages linking here will appear here.</p>}
     </div>
     {status && <p role="status" className="text-red-600">{status}</p>}
-  </section>;
+        </div>
+      </div>
+    </section>
+  );
 }
